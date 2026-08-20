@@ -1,17 +1,32 @@
 ﻿Imports System.Data.SQLite
-Imports System.IO
-Imports Microsoft.VisualBasic.FileIO
-Imports System.Drawing.Printing
 Imports System.Drawing.Drawing2D
 Imports System.Drawing.Imaging
+Imports System.Drawing.Printing
+Imports System.Drawing.Text
+Imports System.IO
 Imports System.Reflection
+Imports System.Text
+Imports Microsoft.VisualBasic.FileIO
 
 Public Class Form1
 
     ' =========================================================
     ' 0. VARIABLES GLOBALES Y CONTROLES
     ' =========================================================
-    Dim cadenaConexion As String = "Data Source=BaseDatosADN.db;Version=3;"
+    ' Al hacerla PUBLIC SHARED, todas tus demás ventanas podrán leer esta misma ruta
+    Public Shared cadenaConexion As String = ""
+
+    ' Paleta de colores suaves modernos
+    Private ReadOnly ColorPrimario As Drawing.Color = Drawing.Color.FromArgb(37, 99, 235)
+    Private ReadOnly ColorPrimarioHover As Drawing.Color = Drawing.Color.FromArgb(59, 130, 246)
+    Private ReadOnly ColorExito As Drawing.Color = Drawing.Color.FromArgb(16, 149, 106)
+    Private ReadOnly ColorExitoHover As Drawing.Color = Drawing.Color.FromArgb(20, 168, 120)
+    Private ReadOnly ColorAlerta As Drawing.Color = Drawing.Color.FromArgb(217, 119, 6)
+    Private ReadOnly ColorAlertaHover As Drawing.Color = Drawing.Color.FromArgb(245, 158, 11)
+    Private ReadOnly ColorPeligro As Drawing.Color = Drawing.Color.FromArgb(194, 65, 12)
+    Private ReadOnly ColorPeligroHover As Drawing.Color = Drawing.Color.FromArgb(234, 88, 12)
+    Private ReadOnly ColorOscuro As Drawing.Color = Drawing.Color.FromArgb(30, 41, 59)
+    Private ReadOnly ColorOscuroHover As Drawing.Color = Drawing.Color.FromArgb(51, 65, 85)
 
     ' Contenedor maestro de vistas (Área delimitada a la derecha)
     Private pnlContenedorVistas As New Panel()
@@ -21,6 +36,16 @@ Public Class Form1
     Private panelConfig As New Panel()
     Private panelReportes As New Panel()
     Private panelAware As New Panel()
+    Private pnlModuloTablas As New Panel()
+
+    ' Barra superior de búsqueda, títulos, exportación e importación para las tablas
+    Private pnlHeaderTabla As New Panel()
+    Private lblTituloModuloTabla As New Label()
+    Private lblContadorRegistros As New Label()
+    Private pnlBuscadorBox As New Panel()
+    Private txtBuscadorTabla As New TextBox()
+    Private WithEvents btnExportarModuloCSV As New Button()
+    Private WithEvents btnImportarModuloCSV As New Button()
 
     ' Controles de la Barra Indicadora de Menú (Animación lateral)
     Private pnlIndicadorMenu As New Panel()
@@ -53,8 +78,11 @@ Public Class Form1
     Private picLogoConfig As New PictureBox()
     Private WithEvents btnSubirLogo As New Button()
     Private WithEvents btnGuardarConfig As New Button()
+    Private WithEvents btnGestionUsuarios As New Button()
+    Private WithEvents btnRespaldarBD As New Button()
+    Private WithEvents btnRestaurarBD As New Button()
 
-    ' Controles de Reportes Oficiales (Entradas / Salidas)
+    ' Controles de Reportes Oficiales (Entradas / Salidas / Kardex Combinado)
     Private cmbModuloRep As New ComboBox()
     Private cmbMesRep As New ComboBox()
     Private txtAnioRep As New TextBox()
@@ -63,6 +91,7 @@ Public Class Form1
     Private dtImprimir As New DataTable()
     Private indiceImpresion As Integer = 0
     Private numPaginaReporte As Integer = 0
+    Private codigoActualGrupo As String = ""
 
     ' Controles del Módulo AWaRe
     Private cmbMesAware As New ComboBox()
@@ -78,6 +107,7 @@ Public Class Form1
     Private lblKpiTotalNum As New Label()
     Private lblKpiCumplimiento As New Label()
     Private WithEvents picGraficoAware As New PictureBox()
+    Private pnlTablaAwareContainer As New Panel()
     Private dgvDetalleAware As New DataGridView()
     Private WithEvents docImprimirAware As New PrintDocument()
 
@@ -101,52 +131,61 @@ Public Class Form1
     ' 1. AL CARGAR EL PROGRAMA
     ' =========================================================
     Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
-        HabilitarDobleBuffer(Me)
-        CrearBaseDeDatosSiNoExiste()
 
-        ' =========================================================
-        ' 1. VERIFICACIÓN DE LICENCIA LOCAL RSA
-        ' =========================================================
+        ' --- NUEVA LÓGICA DE RUTA (C:\Gestion de Antimicrobianos) ---
+        Dim carpetaApp As String = "C:\Gestion de Antimicrobianos"
+
+        Try
+            If Not IO.Directory.Exists(carpetaApp) Then
+                IO.Directory.CreateDirectory(carpetaApp)
+            End If
+        Catch ex As Exception
+            MessageBox.Show("No se pudo acceder o crear la carpeta en C:\Gestion de Antimicrobianos." & vbCrLf & "Por favor ejecuta el programa como Administrador.", "Error de Permisos", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+
+        Dim rutaBaseDatos As String = IO.Path.Combine(carpetaApp, "BaseDatosADN.db")
+        cadenaConexion = "Data Source=" & rutaBaseDatos & ";Version=3;"
+        ' ---------------------------------------------------
+
         Dim msgErrorLic As String = ""
         If Not LicenciaManager.ValidarLicenciaActual(msgErrorLic) Then
             Dim ventanaActivacion As New FormActivacion()
-            If ventanaActivacion.ShowDialog() <> DialogResult.OK Then
-                ' Si el usuario cancela o no activa la licencia, se cierra el programa
+            ventanaActivacion.StartPosition = FormStartPosition.CenterScreen
+            If ventanaActivacion.ShowDialog(Me) <> DialogResult.OK Then
                 Application.Exit()
                 Return
             End If
         End If
 
-        ' =========================================================
-        ' 2. CARGA NORMAL DE LA APLICACIÓN
-        ' =========================================================
-        HabilitarDobleBuffer(Me)
         CrearBaseDeDatosSiNoExiste()
-        ' ... resto de tu código de Form1_Load ...
 
-        ' 1. Configurar y delimitar contenedor maestro
+        Dim ventanaLogin As New FormLogin()
+        ventanaLogin.StartPosition = FormStartPosition.CenterScreen
+        If ventanaLogin.ShowDialog(Me) <> DialogResult.OK Then
+            Application.Exit()
+            Return
+        End If
+
+        HabilitarDobleBuffer(Me)
+
         pnlContenedorVistas.Dock = DockStyle.Fill
         pnlContenedorVistas.BackColor = Drawing.Color.White
         Me.Controls.Add(pnlContenedorVistas)
         HabilitarDobleBuffer(pnlContenedorVistas)
 
-        ' 2. Prioridad Z-Order: Menú a la izquierda y contenedor libre a la derecha
         Panel1.SendToBack()
         pnlContenedorVistas.BringToFront()
 
-        ' 3. Overlay para transición Fade
         picFadeOverlay.Dock = DockStyle.Fill
         picFadeOverlay.Visible = False
         pnlContenedorVistas.Controls.Add(picFadeOverlay)
 
-        ' 4. Timers de Animación
         tmrAnimIndicador.Interval = 10
         AddHandler tmrAnimIndicador.Tick, AddressOf AnimarIndicadorMenu_Tick
 
         tmrFade.Interval = 15
         AddHandler tmrFade.Tick, AddressOf AnimarFade_Tick
 
-        ' 5. Inicializar diseño, pantallas y datos
         AplicarEstiloFluent()
         ConfigurarIndicadorMenu()
 
@@ -154,10 +193,9 @@ Public Class Form1
         ConfigurarPantallaAjustes()
         ConfigurarPantallaReportes()
         ConfigurarPantallaAware()
-        ConfigurarContenedorDataGridView()
+        ConfigurarContenedorTablasConBuscador()
         CargarConfiguracionActual()
 
-        ' Foco inicial en Pantalla de Inicio
         SeleccionarMenu(Button1, panelInicio, True)
     End Sub
 
@@ -194,39 +232,131 @@ Public Class Form1
             comando.CommandText = "CREATE TABLE IF NOT EXISTS Configuracion (Id INTEGER PRIMARY KEY, NombreFarmacia TEXT, Direccion TEXT, Responsable TEXT, RutaLogo TEXT)"
             comando.ExecuteNonQuery()
 
-            comando.CommandText = "INSERT OR IGNORE INTO Configuracion (Id, NombreFarmacia, Responsable) VALUES (1, 'FARMACIAS ADN', 'C. SILVIA CARBAJAL PERALES')"
+            comando.CommandText = "INSERT OR IGNORE INTO Configuracion (Id, NombreFarmacia, Direccion, Responsable, RutaLogo) VALUES (1, '', '', '', '')"
+            comando.ExecuteNonQuery()
+
+            comando.CommandText = "CREATE TABLE IF NOT EXISTS Usuarios (Id INTEGER PRIMARY KEY AUTOINCREMENT, Usuario TEXT UNIQUE, Password TEXT, Nombre TEXT, Rol TEXT)"
+            comando.ExecuteNonQuery()
+
+            comando.CommandText = "INSERT OR IGNORE INTO Usuarios (Id, Usuario, Password, Nombre, Rol) VALUES (1, 'admin', 'admin', 'Administrador General', 'ADMIN')"
             comando.ExecuteNonQuery()
         End Using
     End Sub
 
 
     ' =========================================================
-    ' 2. FUNCIONES AUXILIARES DE DIBUJO Y BORDES
+    ' 2. FUNCIONES DE DIBUJO SUAVE Y ANTI-ALIASING
     ' =========================================================
-    Private Sub RedondearBoton(btn As Button, Optional radio As Integer = 16)
-        AddHandler btn.SizeChanged, Sub(s, e) ActualizarRegionControl(btn, radio)
-        ActualizarRegionControl(btn, radio)
+    Private Sub EstilizarBotonSuave(btn As Button, radio As Integer, colorFondo As Drawing.Color, colorHover As Drawing.Color, colorTexto As Drawing.Color, Optional colorBorde As Drawing.Color = Nothing, Optional grosorBorde As Single = 1.0F)
+        btn.FlatStyle = FlatStyle.Flat
+        btn.FlatAppearance.BorderSize = 0
+        btn.ForeColor = colorTexto
+        btn.Cursor = Cursors.Hand
+        btn.BackColor = Drawing.Color.Transparent
+
+        Dim isHovered As Boolean = False
+        Dim isPressed As Boolean = False
+
+        AddHandler btn.MouseEnter, Sub(s, e)
+                                       isHovered = True
+                                       btn.Invalidate()
+                                   End Sub
+        AddHandler btn.MouseLeave, Sub(s, e)
+                                       isHovered = False
+                                       isPressed = False
+                                       btn.Invalidate()
+                                   End Sub
+        AddHandler btn.MouseDown, Sub(s, e)
+                                      isPressed = True
+                                      btn.Invalidate()
+                                  End Sub
+        AddHandler btn.MouseUp, Sub(s, e)
+                                    isPressed = False
+                                    btn.Invalidate()
+                                End Sub
+
+        AddHandler btn.Paint, Sub(s, e)
+                                  Dim g As Graphics = e.Graphics
+                                  g.SmoothingMode = SmoothingMode.AntiAlias
+                                  g.PixelOffsetMode = PixelOffsetMode.HighQuality
+                                  g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit
+
+                                  Dim parentBg As Drawing.Color = If(btn.Parent IsNot Nothing, btn.Parent.BackColor, Drawing.Color.White)
+                                  Using brushParent As New SolidBrush(parentBg)
+                                      g.FillRectangle(brushParent, btn.ClientRectangle)
+                                  End Using
+
+                                  Dim currentColor As Drawing.Color = colorFondo
+                                  If isPressed Then
+                                      currentColor = OscurecerColor(colorHover, 0.08F)
+                                  ElseIf isHovered Then
+                                      currentColor = colorHover
+                                  End If
+
+                                  Dim rect As New Rectangle(0, 0, btn.Width - 1, btn.Height - 1)
+                                  Using path As GraphicsPath = CrearRutaRedondeada(rect, radio)
+                                      Using brushBtn As New SolidBrush(currentColor)
+                                          g.FillPath(brushBtn, path)
+                                      End Using
+
+                                      If colorBorde <> Drawing.Color.Empty AndAlso colorBorde <> Drawing.Color.Transparent Then
+                                          Using penBrd As New Pen(colorBorde, grosorBorde)
+                                              g.DrawPath(penBrd, path)
+                                          End Using
+                                      End If
+                                  End Using
+
+                                  Dim sf As New StringFormat With {
+                                      .Alignment = If(btn.TextAlign = ContentAlignment.MiddleLeft, StringAlignment.Near, StringAlignment.Center),
+                                      .LineAlignment = StringAlignment.Center
+                                  }
+
+                                  Dim textRect As Rectangle = btn.ClientRectangle
+                                  If btn.TextAlign = ContentAlignment.MiddleLeft Then
+                                      textRect.X += btn.Padding.Left
+                                      textRect.Width -= btn.Padding.Left
+                                  End If
+
+                                  Using brushTxt As New SolidBrush(colorTexto)
+                                      g.DrawString(btn.Text, btn.Font, brushTxt, textRect, sf)
+                                  End Using
+                              End Sub
     End Sub
 
-    Private Sub ActualizarRegionControl(ctrl As Control, radio As Integer)
-        If ctrl.Width <= 0 OrElse ctrl.Height <= 0 Then
-            Return
-        End If
-        Using path As New GraphicsPath()
-            Dim r As New Rectangle(0, 0, ctrl.Width, ctrl.Height)
-            Dim d As Integer = radio * 2
-            If d > ctrl.Height Then d = ctrl.Height
-            If d > ctrl.Width Then d = ctrl.Width
+    Private Function OscurecerColor(c As Drawing.Color, factor As Single) As Drawing.Color
+        Return Drawing.Color.FromArgb(c.A, Math.Max(0, CInt(c.R * (1.0F - factor))), Math.Max(0, CInt(c.G * (1.0F - factor))), Math.Max(0, CInt(c.B * (1.0F - factor))))
+    End Function
 
-            path.StartFigure()
-            path.AddArc(r.X, r.Y, d, d, 180, 90)
-            path.AddArc(r.Right - d, r.Y, d, d, 270, 90)
-            path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90)
-            path.AddArc(r.X, r.Bottom - d, d, d, 90, 90)
-            path.CloseFigure()
+    Private Function CrearRutaRedondeada(r As Rectangle, radio As Integer) As GraphicsPath
+        Dim path As New GraphicsPath()
+        Dim d As Integer = radio * 2
+        If d > r.Height Then d = r.Height
+        If d > r.Width Then d = r.Width
+        If d <= 0 Then d = 1
 
-            ctrl.Region = New Region(path)
-        End Using
+        path.StartFigure()
+        path.AddArc(r.X, r.Y, d, d, 180, 90)
+        path.AddArc(r.Right - d, r.Y, d, d, 270, 90)
+        path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90)
+        path.AddArc(r.X, r.Bottom - d, d, d, 90, 90)
+        path.CloseFigure()
+        Return path
+    End Function
+
+    Private Sub RedondearPanelBorde(pnl As Panel, Optional radio As Integer = 12, Optional colorBorde As Drawing.Color = Nothing, Optional grosor As Single = 1.0F)
+        If colorBorde = Drawing.Color.Empty Then colorBorde = Drawing.Color.FromArgb(203, 213, 225)
+        pnl.BorderStyle = BorderStyle.None
+
+        AddHandler pnl.Paint, Sub(s, e)
+                                  Dim g As Graphics = e.Graphics
+                                  g.SmoothingMode = SmoothingMode.AntiAlias
+                                  g.PixelOffsetMode = PixelOffsetMode.HighQuality
+                                  Using path As GraphicsPath = CrearRutaRedondeada(New Rectangle(0, 0, pnl.Width - 1, pnl.Height - 1), radio)
+                                      Using penBrd As New Pen(colorBorde, grosor)
+                                          g.DrawPath(penBrd, path)
+                                      End Using
+                                  End Using
+                              End Sub
     End Sub
 
     Private Function CalcularRectanguloProporcional(img As Image, posX As Integer, posY As Integer, maxAncho As Integer, maxAlto As Integer) As Rectangle
@@ -242,13 +372,12 @@ Public Class Form1
     ' 3. INDICADOR DINÁMICO DE MENÚ LATERAL
     ' =========================================================
     Private Sub ConfigurarIndicadorMenu()
-        pnlIndicadorMenu.Size = New Size(5, 24)
-        pnlIndicadorMenu.BackColor = Drawing.Color.FromArgb(0, 102, 204)
-        pnlIndicadorMenu.Location = New Point(3, 10)
+        pnlIndicadorMenu.Size = New Size(4, 26)
+        pnlIndicadorMenu.BackColor = ColorPrimario
+        pnlIndicadorMenu.Location = New Point(2, 10)
         pnlIndicadorMenu.Visible = True
         Panel1.Controls.Add(pnlIndicadorMenu)
         pnlIndicadorMenu.BringToFront()
-        ActualizarRegionControl(pnlIndicadorMenu, 2)
     End Sub
 
     Private Sub AnimarIndicadorMenu_Tick(sender As Object, e As EventArgs)
@@ -341,7 +470,7 @@ Public Class Form1
         panelConfig.Visible = False
         panelReportes.Visible = False
         panelAware.Visible = False
-        DataGridView1.Visible = False
+        pnlModuloTablas.Visible = False
     End Sub
 
     Private Sub SeleccionarMenu(btn As Button, controlVista As Control, Optional forzarInmediato As Boolean = False)
@@ -358,12 +487,12 @@ Public Class Form1
             If TypeOf ctrl Is Button Then
                 Dim b As Button = CType(ctrl, Button)
                 If b Is btn Then
-                    b.BackColor = Drawing.Color.FromArgb(229, 238, 249)
-                    b.ForeColor = Drawing.Color.FromArgb(0, 102, 204)
+                    b.BackColor = Drawing.Color.FromArgb(239, 246, 255)
+                    b.ForeColor = ColorPrimario
                     b.Font = New Drawing.Font("Segoe UI", 10.0F, Drawing.FontStyle.Bold)
                 Else
-                    b.BackColor = Drawing.Color.FromArgb(243, 243, 243)
-                    b.ForeColor = Drawing.Color.FromArgb(50, 50, 50)
+                    b.BackColor = Drawing.Color.FromArgb(248, 250, 252)
+                    b.ForeColor = Drawing.Color.FromArgb(71, 85, 105)
                     b.Font = New Drawing.Font("Segoe UI", 10.0F, Drawing.FontStyle.Regular)
                 End If
             End If
@@ -382,27 +511,27 @@ Public Class Form1
 
     Private Sub Button2_Click(sender As Object, e As EventArgs) Handles Button2.Click
         ConfigurarTablaEntradas()
-        SeleccionarMenu(Button2, DataGridView1)
+        SeleccionarMenu(Button2, pnlModuloTablas)
     End Sub
 
     Private Sub Button3_Click(sender As Object, e As EventArgs) Handles Button3.Click
         ConfigurarTablaSalidas()
-        SeleccionarMenu(Button3, DataGridView1)
+        SeleccionarMenu(Button3, pnlModuloTablas)
     End Sub
 
     Private Sub Button4_Click(sender As Object, e As EventArgs) Handles Button4.Click
         ConfigurarTablaMedicos()
-        SeleccionarMenu(Button4, DataGridView1)
+        SeleccionarMenu(Button4, pnlModuloTablas)
     End Sub
 
     Private Sub Button5_Click(sender As Object, e As EventArgs) Handles Button5.Click
         ConfigurarTablaProveedores()
-        SeleccionarMenu(Button5, DataGridView1)
+        SeleccionarMenu(Button5, pnlModuloTablas)
     End Sub
 
     Private Sub Button6_Click(sender As Object, e As EventArgs) Handles Button6.Click
         ConfigurarTablaInventario()
-        SeleccionarMenu(Button6, DataGridView1)
+        SeleccionarMenu(Button6, pnlModuloTablas)
     End Sub
 
     Private Sub Button7_Click(sender As Object, e As EventArgs) Handles Button7.Click
@@ -434,21 +563,18 @@ Public Class Form1
         panelInicio.Controls.Add(panelCentroInicio)
         HabilitarDobleBuffer(panelCentroInicio)
 
-        ' 1. Logotipo grande y centrado
         picLogoInicio.Size = New Size(420, 240)
         picLogoInicio.Location = New Point((panelCentroInicio.Width - picLogoInicio.Width) \ 2, 10)
         picLogoInicio.SizeMode = PictureBoxSizeMode.Zoom
         panelCentroInicio.Controls.Add(picLogoInicio)
 
-        ' 2. Nombre de la Farmacia (Centrado)
         lblNomInicio.Font = New Drawing.Font("Segoe UI", 18.0F, Drawing.FontStyle.Bold)
-        lblNomInicio.ForeColor = Drawing.Color.FromArgb(0, 102, 204)
+        lblNomInicio.ForeColor = ColorPrimario
         lblNomInicio.TextAlign = ContentAlignment.MiddleCenter
         lblNomInicio.AutoSize = False
         lblNomInicio.Size = New Size(650, 36)
         lblNomInicio.Location = New Point(0, 255)
 
-        ' 3. Dirección Completa (Centrada)
         lblDirInicio.Font = New Drawing.Font("Segoe UI", 10.5F, Drawing.FontStyle.Regular)
         lblDirInicio.ForeColor = Drawing.Color.FromArgb(70, 70, 70)
         lblDirInicio.TextAlign = ContentAlignment.MiddleCenter
@@ -456,7 +582,6 @@ Public Class Form1
         lblDirInicio.Size = New Size(650, 25)
         lblDirInicio.Location = New Point(0, 293)
 
-        ' 4. Responsable Sanitario (Centrado)
         lblRespInicio.Font = New Drawing.Font("Segoe UI", 10.0F, Drawing.FontStyle.Italic)
         lblRespInicio.ForeColor = Drawing.Color.FromArgb(100, 100, 100)
         lblRespInicio.TextAlign = ContentAlignment.MiddleCenter
@@ -468,39 +593,23 @@ Public Class Form1
         panelCentroInicio.Controls.Add(lblDirInicio)
         panelCentroInicio.Controls.Add(lblRespInicio)
 
-        ' 5. Botones de Acción Rápida Redondeados
         btnNuevaEntrada.Text = "+ Registrar Entrada"
         btnNuevaEntrada.Size = New Size(290, 65)
         btnNuevaEntrada.Location = New Point(25, 365)
-        btnNuevaEntrada.BackColor = Drawing.Color.FromArgb(0, 153, 76)
-        btnNuevaEntrada.ForeColor = Drawing.Color.White
-        btnNuevaEntrada.Font = New Drawing.Font("Segoe UI", 12.0F, Drawing.FontStyle.Bold)
-        btnNuevaEntrada.FlatStyle = FlatStyle.Flat
-        btnNuevaEntrada.FlatAppearance.BorderSize = 0
-        btnNuevaEntrada.Cursor = Cursors.Hand
-        RedondearBoton(btnNuevaEntrada, 18)
+        btnNuevaEntrada.Font = New Drawing.Font("Segoe UI", 11.5F, Drawing.FontStyle.Bold)
+        EstilizarBotonSuave(btnNuevaEntrada, 16, ColorExito, ColorExitoHover, Drawing.Color.White)
 
         btnNuevaSalida.Text = "+ Registrar Salida (Receta)"
         btnNuevaSalida.Size = New Size(290, 65)
         btnNuevaSalida.Location = New Point(335, 365)
-        btnNuevaSalida.BackColor = Drawing.Color.FromArgb(0, 102, 204)
-        btnNuevaSalida.ForeColor = Drawing.Color.White
-        btnNuevaSalida.Font = New Drawing.Font("Segoe UI", 12.0F, Drawing.FontStyle.Bold)
-        btnNuevaSalida.FlatStyle = FlatStyle.Flat
-        btnNuevaSalida.FlatAppearance.BorderSize = 0
-        btnNuevaSalida.Cursor = Cursors.Hand
-        RedondearBoton(btnNuevaSalida, 18)
+        btnNuevaSalida.Font = New Drawing.Font("Segoe UI", 11.5F, Drawing.FontStyle.Bold)
+        EstilizarBotonSuave(btnNuevaSalida, 16, ColorPrimario, ColorPrimarioHover, Drawing.Color.White)
 
-        btnImportarCSV.Text = "📁 Importar Catálogos desde CSV"
+        btnImportarCSV.Text = "📁 Importación Inteligente desde CSV"
         btnImportarCSV.Size = New Size(600, 55)
         btnImportarCSV.Location = New Point(25, 442)
-        btnImportarCSV.BackColor = Drawing.Color.FromArgb(242, 101, 34)
-        btnImportarCSV.ForeColor = Drawing.Color.White
-        btnImportarCSV.Font = New Drawing.Font("Segoe UI", 11.5F, Drawing.FontStyle.Bold)
-        btnImportarCSV.FlatStyle = FlatStyle.Flat
-        btnImportarCSV.FlatAppearance.BorderSize = 0
-        btnImportarCSV.Cursor = Cursors.Hand
-        RedondearBoton(btnImportarCSV, 18)
+        btnImportarCSV.Font = New Drawing.Font("Segoe UI", 11.0F, Drawing.FontStyle.Bold)
+        EstilizarBotonSuave(btnImportarCSV, 16, ColorAlerta, ColorAlertaHover, Drawing.Color.White)
 
         panelCentroInicio.Controls.Add(btnNuevaEntrada)
         panelCentroInicio.Controls.Add(btnNuevaSalida)
@@ -533,47 +642,57 @@ Public Class Form1
         pnlContenedorVistas.Controls.Add(panelConfig)
         HabilitarDobleBuffer(panelConfig)
 
-        Dim lblTitulo As New Label With {.Text = "Configuración del Sistema", .Location = New Point(35, 25), .Font = New Drawing.Font("Segoe UI", 16.0F, Drawing.FontStyle.Bold), .AutoSize = True}
+        Dim lblTitulo As New Label With {.Text = "Configuración del Sistema", .Location = New Point(35, 20), .Font = New Drawing.Font("Segoe UI", 16.0F, Drawing.FontStyle.Bold), .AutoSize = True}
 
-        Dim lblNom As New Label With {.Text = "Nombre de la Farmacia:", .Location = New Point(35, 80), .AutoSize = True, .Font = New Drawing.Font("Segoe UI", 10.0F)}
-        txtNomFarmacia.Location = New Point(35, 105)
-        txtNomFarmacia.Size = New Size(400, 30)
+        Dim lblNom As New Label With {.Text = "Nombre de la Farmacia:", .Location = New Point(35, 65), .AutoSize = True, .Font = New Drawing.Font("Segoe UI", 10.0F)}
+        txtNomFarmacia.Location = New Point(35, 88)
+        txtNomFarmacia.Size = New Size(400, 28)
         txtNomFarmacia.Font = New Drawing.Font("Segoe UI", 11.0F)
 
-        Dim lblDir As New Label With {.Text = "Dirección Completa:", .Location = New Point(35, 150), .AutoSize = True, .Font = New Drawing.Font("Segoe UI", 10.0F)}
-        txtDireccion.Location = New Point(35, 175)
-        txtDireccion.Size = New Size(400, 30)
+        Dim lblDir As New Label With {.Text = "Dirección Completa:", .Location = New Point(35, 125), .AutoSize = True, .Font = New Drawing.Font("Segoe UI", 10.0F)}
+        txtDireccion.Location = New Point(35, 148)
+        txtDireccion.Size = New Size(400, 28)
         txtDireccion.Font = New Drawing.Font("Segoe UI", 11.0F)
 
-        Dim lblResp As New Label With {.Text = "Nombre del Responsable Sanitario:", .Location = New Point(35, 220), .AutoSize = True, .Font = New Drawing.Font("Segoe UI", 10.0F)}
-        txtResponsable.Location = New Point(35, 245)
-        txtResponsable.Size = New Size(400, 30)
+        Dim lblResp As New Label With {.Text = "Nombre del Responsable Sanitario:", .Location = New Point(35, 185), .AutoSize = True, .Font = New Drawing.Font("Segoe UI", 10.0F)}
+        txtResponsable.Location = New Point(35, 208)
+        txtResponsable.Size = New Size(400, 28)
         txtResponsable.Font = New Drawing.Font("Segoe UI", 11.0F)
 
-        picLogoConfig.Location = New Point(460, 105)
-        picLogoConfig.Size = New Size(150, 150)
+        picLogoConfig.Location = New Point(460, 88)
+        picLogoConfig.Size = New Size(150, 148)
         picLogoConfig.SizeMode = PictureBoxSizeMode.Zoom
         picLogoConfig.BorderStyle = BorderStyle.FixedSingle
 
         btnSubirLogo.Text = "Cargar Logo"
-        btnSubirLogo.Location = New Point(460, 265)
+        btnSubirLogo.Location = New Point(460, 245)
         btnSubirLogo.Size = New Size(150, 35)
-        btnSubirLogo.BackColor = Drawing.Color.FromArgb(230, 230, 230)
-        btnSubirLogo.FlatStyle = FlatStyle.Flat
-        btnSubirLogo.FlatAppearance.BorderSize = 0
-        btnSubirLogo.Cursor = Cursors.Hand
-        RedondearBoton(btnSubirLogo, 12)
+        btnSubirLogo.Font = New Font("Segoe UI", 9.5F, FontStyle.Bold)
+        EstilizarBotonSuave(btnSubirLogo, 10, Drawing.Color.FromArgb(241, 245, 249), Drawing.Color.FromArgb(226, 232, 240), Drawing.Color.FromArgb(51, 65, 85), Drawing.Color.FromArgb(203, 213, 225), 1.0F)
 
-        btnGuardarConfig.Text = "Guardar Configuración"
-        btnGuardarConfig.Location = New Point(35, 310)
-        btnGuardarConfig.Size = New Size(400, 48)
-        btnGuardarConfig.BackColor = Drawing.Color.FromArgb(0, 102, 204)
-        btnGuardarConfig.ForeColor = Drawing.Color.White
-        btnGuardarConfig.Font = New Drawing.Font("Segoe UI", 12.0F, Drawing.FontStyle.Bold)
-        btnGuardarConfig.FlatStyle = FlatStyle.Flat
-        btnGuardarConfig.FlatAppearance.BorderSize = 0
-        btnGuardarConfig.Cursor = Cursors.Hand
-        RedondearBoton(btnGuardarConfig, 16)
+        btnGuardarConfig.Text = "💾 Guardar Datos de la Farmacia"
+        btnGuardarConfig.Location = New Point(35, 255)
+        btnGuardarConfig.Size = New Size(400, 42)
+        btnGuardarConfig.Font = New Drawing.Font("Segoe UI", 10.5F, Drawing.FontStyle.Bold)
+        EstilizarBotonSuave(btnGuardarConfig, 12, ColorPrimario, ColorPrimarioHover, Drawing.Color.White)
+
+        btnGestionUsuarios.Text = "👥 Administrar Usuarios y Permisos"
+        btnGestionUsuarios.Location = New Point(35, 305)
+        btnGestionUsuarios.Size = New Size(400, 42)
+        btnGestionUsuarios.Font = New Drawing.Font("Segoe UI", 10.5F, Drawing.FontStyle.Bold)
+        EstilizarBotonSuave(btnGestionUsuarios, 12, ColorOscuro, ColorOscuroHover, Drawing.Color.White)
+
+        btnRespaldarBD.Text = "📦 Crear Respaldo de BD"
+        btnRespaldarBD.Location = New Point(35, 355)
+        btnRespaldarBD.Size = New Size(195, 42)
+        btnRespaldarBD.Font = New Drawing.Font("Segoe UI", 9.5F, Drawing.FontStyle.Bold)
+        EstilizarBotonSuave(btnRespaldarBD, 12, ColorExito, ColorExitoHover, Drawing.Color.White)
+
+        btnRestaurarBD.Text = "♻ Restaurar Respaldo"
+        btnRestaurarBD.Location = New Point(240, 355)
+        btnRestaurarBD.Size = New Size(195, 42)
+        btnRestaurarBD.Font = New Drawing.Font("Segoe UI", 9.5F, Drawing.FontStyle.Bold)
+        EstilizarBotonSuave(btnRestaurarBD, 12, ColorPeligro, ColorPeligroHover, Drawing.Color.White)
 
         panelConfig.Controls.Add(lblTitulo)
         panelConfig.Controls.Add(lblNom)
@@ -585,6 +704,9 @@ Public Class Form1
         panelConfig.Controls.Add(picLogoConfig)
         panelConfig.Controls.Add(btnSubirLogo)
         panelConfig.Controls.Add(btnGuardarConfig)
+        panelConfig.Controls.Add(btnGestionUsuarios)
+        panelConfig.Controls.Add(btnRespaldarBD)
+        panelConfig.Controls.Add(btnRestaurarBD)
     End Sub
 
     Private Sub CargarConfiguracionActual()
@@ -601,9 +723,9 @@ Public Class Form1
                     txtDireccion.Text = dir
                     txtResponsable.Text = resp
 
-                    lblNomInicio.Text = nom.ToUpper()
+                    lblNomInicio.Text = If(nom.Trim() <> "", nom.ToUpper(), "MI FARMACIA (CONFIGURAR EN AJUSTES)")
                     lblDirInicio.Text = If(dir.Trim() <> "", dir, "Dirección no registrada")
-                    lblRespInicio.Text = If(resp.Trim() <> "", "Responsable Sanitario: " & resp, "Responsable Sanitario: No registrado")
+                    lblRespInicio.Text = If(resp.Trim() <> "", "Responsable Sanitario: " & resp, "Responsable Sanitario: Pendiente de registrar")
 
                     Dim rutaLogo As String = lector("RutaLogo").ToString()
                     If File.Exists(rutaLogo) Then
@@ -620,9 +742,11 @@ Public Class Form1
     Private Sub btnSubirLogo_Click(sender As Object, e As EventArgs) Handles btnSubirLogo.Click
         Dim dialog As New OpenFileDialog()
         dialog.Filter = "Archivos de Imagen|*.jpg;*.jpeg;*.png;*.bmp"
-        If dialog.ShowDialog() = DialogResult.OK Then
+        If dialog.ShowDialog(Me) = DialogResult.OK Then
             Try
-                Dim carpetaDestino As String = Path.Combine(Application.StartupPath, "Recursos")
+                ' --- RUTA EN C:\ ---
+                Dim carpetaDestino As String = Path.Combine("C:\Gestion de Antimicrobianos", "Recursos")
+
                 If Not Directory.Exists(carpetaDestino) Then
                     Directory.CreateDirectory(carpetaDestino)
                 End If
@@ -637,7 +761,7 @@ Public Class Form1
 
                 picLogoConfig.Tag = rutaFinal
             Catch ex As Exception
-                MessageBox.Show("Error al cargar imagen: " & ex.Message)
+                MessageBox.Show("Error al cargar imagen. Revisa los permisos de administrador: " & ex.Message)
             End Try
         End If
     End Sub
@@ -653,20 +777,437 @@ Public Class Form1
             cmd.ExecuteNonQuery()
         End Using
 
-        lblNomInicio.Text = txtNomFarmacia.Text.Trim().ToUpper()
+        lblNomInicio.Text = If(txtNomFarmacia.Text.Trim() <> "", txtNomFarmacia.Text.Trim().ToUpper(), "MI FARMACIA (CONFIGURAR EN AJUSTES)")
         lblDirInicio.Text = If(txtDireccion.Text.Trim() <> "", txtDireccion.Text.Trim(), "Dirección no registrada")
-        lblRespInicio.Text = If(txtResponsable.Text.Trim() <> "", "Responsable Sanitario: " & txtResponsable.Text.Trim(), "Responsable Sanitario: No registrado")
+        lblRespInicio.Text = If(txtResponsable.Text.Trim() <> "", "Responsable Sanitario: " & txtResponsable.Text.Trim(), "Responsable Sanitario: Pendiente de registrar")
 
         MessageBox.Show("Configuración guardada exitosamente.", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information)
     End Sub
 
+    Private Sub btnGestionUsuarios_Click(sender As Object, e As EventArgs) Handles btnGestionUsuarios.Click
+        If Not SesionActual.EsAdmin() Then
+            MessageBox.Show("Acceso Restringido: Solo los administradores pueden gestionar usuarios y permisos.", "Sin Permiso", MessageBoxButtons.OK, MessageBoxIcon.Stop)
+            Return
+        End If
+
+        Dim ventanaUsers As New FormUsuarios()
+        ventanaUsers.ShowDialog(Me)
+    End Sub
+
+    Private Sub btnRespaldarBD_Click(sender As Object, e As EventArgs) Handles btnRespaldarBD.Click
+        If Not SesionActual.EsAdmin() Then
+            MessageBox.Show("Acceso Restringido: Solo los administradores pueden generar respaldos de seguridad.", "Sin Permiso", MessageBoxButtons.OK, MessageBoxIcon.Stop)
+            Return
+        End If
+
+        Dim sfd As New SaveFileDialog()
+        sfd.Title = "Guardar Respaldo de Base de Datos"
+        sfd.Filter = "Base de Datos SQLite (*.db)|*.db|Archivo de Respaldo (*.bak)|*.bak"
+        sfd.FileName = "Respaldo_FarmaciaADN_" & DateTime.Now.ToString("yyyyMMdd_HHmmss") & ".db"
+
+        If sfd.ShowDialog(Me) = DialogResult.OK Then
+            Try
+                Using conOrigen As New SQLiteConnection(cadenaConexion)
+                    Using conDestino As New SQLiteConnection("Data Source=" & sfd.FileName & ";Version=3;")
+                        conOrigen.Open()
+                        conDestino.Open()
+                        conOrigen.BackupDatabase(conDestino, "main", "main", -1, Nothing, 0)
+                    End Using
+                End Using
+
+                MessageBox.Show("¡Respaldo de seguridad creado exitosamente!" & vbCrLf & vbCrLf & "Archivo guardado en:" & vbCrLf & sfd.FileName,
+                                "Respaldo Completado", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Catch ex As Exception
+                MessageBox.Show("Error al generar respaldo: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            End Try
+        End If
+    End Sub
+
+    Private Sub btnRestaurarBD_Click(sender As Object, e As EventArgs) Handles btnRestaurarBD.Click
+        If Not SesionActual.EsAdmin() Then
+            MessageBox.Show("Acceso Restringido: Solo los administradores pueden restaurar respaldos del sistema.", "Sin Permiso", MessageBoxButtons.OK, MessageBoxIcon.Stop)
+            Return
+        End If
+
+        Dim ofd As New OpenFileDialog()
+        ofd.Title = "Seleccionar Archivo de Respaldo para Restaurar"
+        ofd.Filter = "Archivos de Base de Datos (*.db;*.bak)|*.db;*.bak|Todos los archivos (*.*)|*.*"
+
+        If ofd.ShowDialog(Me) = DialogResult.OK Then
+            Dim confirmacion As DialogResult = MessageBox.Show(
+                "ADVERTENCIA DE SEGURIDAD:" & vbCrLf & vbCrLf &
+                "Al restaurar este respaldo, la información actual de inventarios, entradas, salidas y recetas será reemplazada por los datos del archivo seleccionado." & vbCrLf & vbCrLf &
+                "¿Deseas continuar con la restauración?",
+                "Confirmar Recuperación", MessageBoxButtons.YesNo, MessageBoxIcon.Warning)
+
+            If confirmacion = DialogResult.Yes Then
+                Try
+                    Using conOrigen As New SQLiteConnection("Data Source=" & ofd.FileName & ";Version=3;")
+                        Using conDestino As New SQLiteConnection(cadenaConexion)
+                            conOrigen.Open()
+                            conDestino.Open()
+                            conOrigen.BackupDatabase(conDestino, "main", "main", -1, Nothing, 0)
+                        End Using
+                    End Using
+
+                    CargarConfiguracionActual()
+                    MessageBox.Show("¡Base de datos restaurada correctamente en un solo paso!", "Restauración Exitosa", MessageBoxButtons.OK, MessageBoxIcon.Information)
+
+                    If pnlModuloTablas.Visible Then
+                        If lblTituloModuloTabla.Text.Contains("Entradas") Then
+                            ConfigurarTablaEntradas()
+                        ElseIf lblTituloModuloTabla.Text.Contains("Salidas") Then
+                            ConfigurarTablaSalidas()
+                        ElseIf lblTituloModuloTabla.Text.Contains("Inventario") Then
+                            ConfigurarTablaInventario()
+                        ElseIf lblTituloModuloTabla.Text.Contains("Proveedores") Then
+                            ConfigurarTablaProveedores()
+                        ElseIf lblTituloModuloTabla.Text.Contains("Médicos") Then
+                            ConfigurarTablaMedicos()
+                        End If
+                    ElseIf panelAware.Visible Then
+                        CargarReporteAware()
+                    End If
+                Catch ex As Exception
+                    MessageBox.Show("Error al restaurar base de datos: " & ex.Message, "Error de Restauración", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                End Try
+            End If
+        End If
+    End Sub
+
 
     ' =========================================================
-    ' 8. PANTALLA: MÓDULO AWARE (BOTÓN 9) CON AJUSTE DINÁMICO
+    ' 8. CONTENEDOR MODERNO DE TABLAS CON BUSCADOR, EXPORTACIÓN E IMPORTACIÓN
+    ' =========================================================
+    Private Sub ConfigurarContenedorTablasConBuscador()
+        pnlModuloTablas.Dock = DockStyle.Fill
+        pnlModuloTablas.BackColor = Drawing.Color.White
+        pnlContenedorVistas.Controls.Add(pnlModuloTablas)
+        HabilitarDobleBuffer(pnlModuloTablas)
+
+        pnlHeaderTabla.Dock = DockStyle.Top
+        pnlHeaderTabla.Height = 70
+        pnlHeaderTabla.BackColor = Drawing.Color.FromArgb(248, 250, 252)
+        pnlHeaderTabla.Padding = New Padding(20, 10, 20, 10)
+        pnlModuloTablas.Controls.Add(pnlHeaderTabla)
+
+        AddHandler pnlHeaderTabla.Paint, Sub(s, e)
+                                             Using penLinea As New Pen(Drawing.Color.FromArgb(226, 232, 240), 1.5F)
+                                                 e.Graphics.DrawLine(penLinea, 0, pnlHeaderTabla.Height - 1, pnlHeaderTabla.Width, pnlHeaderTabla.Height - 1)
+                                             End Using
+                                         End Sub
+
+        lblTituloModuloTabla.Font = New Font("Segoe UI", 13.0F, FontStyle.Bold)
+        lblTituloModuloTabla.ForeColor = Drawing.Color.FromArgb(15, 23, 42)
+        lblTituloModuloTabla.Location = New Point(20, 12)
+        lblTituloModuloTabla.AutoSize = True
+
+        lblContadorRegistros.Font = New Font("Segoe UI", 9.5F, FontStyle.Regular)
+        lblContadorRegistros.ForeColor = Drawing.Color.FromArgb(100, 116, 139)
+        lblContadorRegistros.Location = New Point(22, 38)
+        lblContadorRegistros.AutoSize = True
+
+        btnImportarModuloCSV.Text = "📥 Importar CSV"
+        btnImportarModuloCSV.Size = New Size(140, 38)
+        btnImportarModuloCSV.Location = New Point(pnlModuloTablas.ClientSize.Width - 615, 15)
+        btnImportarModuloCSV.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        btnImportarModuloCSV.Font = New Font("Segoe UI", 9.0F, FontStyle.Bold)
+        EstilizarBotonSuave(btnImportarModuloCSV, 10, ColorPrimario, ColorPrimarioHover, Drawing.Color.White)
+
+        btnExportarModuloCSV.Text = "📤 Exportar CSV"
+        btnExportarModuloCSV.Size = New Size(140, 38)
+        btnExportarModuloCSV.Location = New Point(pnlModuloTablas.ClientSize.Width - 465, 15)
+        btnExportarModuloCSV.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        btnExportarModuloCSV.Font = New Font("Segoe UI", 9.0F, FontStyle.Bold)
+        EstilizarBotonSuave(btnExportarModuloCSV, 10, ColorExito, ColorExitoHover, Drawing.Color.White)
+
+        pnlBuscadorBox.Size = New Size(300, 38)
+        pnlBuscadorBox.Location = New Point(pnlModuloTablas.ClientSize.Width - 315, 15)
+        pnlBuscadorBox.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        pnlBuscadorBox.BackColor = Drawing.Color.White
+        RedondearPanelBorde(pnlBuscadorBox, 10, Drawing.Color.FromArgb(148, 163, 184), 1.2F)
+
+        Dim lblIconoBuscar As New Label With {
+            .Text = "🔍",
+            .Font = New Font("Segoe UI", 10.5F),
+            .Size = New Size(26, 24),
+            .Location = New Point(10, 8),
+            .ForeColor = Drawing.Color.FromArgb(100, 116, 139)
+        }
+
+        txtBuscadorTabla.BorderStyle = BorderStyle.None
+        txtBuscadorTabla.Font = New Font("Segoe UI", 10.5F)
+        txtBuscadorTabla.Location = New Point(38, 9)
+        txtBuscadorTabla.Size = New Size(250, 22)
+        txtBuscadorTabla.BackColor = Drawing.Color.White
+        AddHandler txtBuscadorTabla.TextChanged, AddressOf TxtBuscadorTabla_TextChanged
+
+        pnlBuscadorBox.Controls.Add(lblIconoBuscar)
+        pnlBuscadorBox.Controls.Add(txtBuscadorTabla)
+
+        pnlHeaderTabla.Controls.Add(lblTituloModuloTabla)
+        pnlHeaderTabla.Controls.Add(lblContadorRegistros)
+        pnlHeaderTabla.Controls.Add(btnImportarModuloCSV)
+        pnlHeaderTabla.Controls.Add(btnExportarModuloCSV)
+        pnlHeaderTabla.Controls.Add(pnlBuscadorBox)
+
+        pnlModuloTablas.Controls.Add(DataGridView1)
+        DataGridView1.Dock = DockStyle.Fill
+        DataGridView1.BringToFront()
+        HabilitarDobleBuffer(DataGridView1)
+    End Sub
+
+    Private Sub btnExportarModuloCSV_Click(sender As Object, e As EventArgs) Handles btnExportarModuloCSV.Click
+        ExportarTablaActualACSV()
+    End Sub
+
+    Private Sub btnImportarModuloCSV_Click(sender As Object, e As EventArgs) Handles btnImportarModuloCSV.Click
+        Dim moduloSugerido As String = ""
+        If lblTituloModuloTabla.Text.Contains("Entradas") Then
+            moduloSugerido = "Entradas"
+        ElseIf lblTituloModuloTabla.Text.Contains("Salidas") Then
+            moduloSugerido = "Salidas"
+        ElseIf lblTituloModuloTabla.Text.Contains("Inventario") Then
+            moduloSugerido = "Inventario"
+        ElseIf lblTituloModuloTabla.Text.Contains("Proveedores") Then
+            moduloSugerido = "Proveedores"
+        ElseIf lblTituloModuloTabla.Text.Contains("Médicos") Then
+            moduloSugerido = "Medicos"
+        End If
+
+        EjecutarImportadorCSVGeneral(moduloSugerido)
+    End Sub
+
+    Private Sub ExportarTablaActualACSV()
+        If DataGridView1.Rows.Count = 0 Then
+            MessageBox.Show("No hay registros en esta área para exportar.", "Sin datos", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Return
+        End If
+
+        Dim nombreModulo As String = "Datos"
+        If lblTituloModuloTabla.Text.Contains("Entradas") Then
+            nombreModulo = "Entradas"
+        ElseIf lblTituloModuloTabla.Text.Contains("Salidas") Then
+            nombreModulo = "Salidas"
+        ElseIf lblTituloModuloTabla.Text.Contains("Inventario") Then
+            nombreModulo = "Inventario"
+        ElseIf lblTituloModuloTabla.Text.Contains("Proveedores") Then
+            nombreModulo = "Proveedores"
+        ElseIf lblTituloModuloTabla.Text.Contains("Médicos") Then
+            nombreModulo = "Medicos"
+        End If
+
+        Dim sfd As New SaveFileDialog()
+        sfd.Title = "Exportar Catálogo a CSV (Excel)"
+        sfd.Filter = "Archivo CSV (*.csv)|*.csv"
+        sfd.FileName = nombreModulo & "_Exportado_" & DateTime.Now.ToString("yyyyMMdd_HHmm") & ".csv"
+
+        If sfd.ShowDialog(Me) = DialogResult.OK Then
+            Try
+                Dim sb As New StringBuilder()
+
+                Dim columnasExportables As New List(Of DataGridViewColumn)()
+                For Each col As DataGridViewColumn In DataGridView1.Columns
+                    If col.Visible AndAlso col.Name <> "AccionRevertir" Then
+                        columnasExportables.Add(col)
+                    End If
+                Next
+
+                Dim lineaHeader As New List(Of String)()
+                For Each col As DataGridViewColumn In columnasExportables
+                    lineaHeader.Add("""" & col.HeaderText.Replace("""", """""") & """")
+                Next
+                sb.AppendLine(String.Join(",", lineaHeader))
+
+                For Each row As DataGridViewRow In DataGridView1.Rows
+                    If row.IsNewRow OrElse Not row.Visible Then Continue For
+
+                    Dim lineaFila As New List(Of String)()
+                    For Each col As DataGridViewColumn In columnasExportables
+                        Dim val As String = If(row.Cells(col.Index).Value IsNot Nothing, row.Cells(col.Index).Value.ToString(), "")
+                        lineaFila.Add("""" & val.Replace("""", """""") & """")
+                    Next
+                    sb.AppendLine(String.Join(",", lineaFila))
+                Next
+
+                File.WriteAllText(sfd.FileName, sb.ToString(), Encoding.UTF8)
+                MessageBox.Show("¡Área de " & nombreModulo & " exportada exitosamente!" & vbCrLf & vbCrLf & "Archivo generado:" & vbCrLf & sfd.FileName,
+                                "Exportación Completa", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Catch ex As Exception
+                MessageBox.Show("Error al exportar archivo CSV: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            End Try
+        End If
+    End Sub
+
+    Private Sub TxtBuscadorTabla_TextChanged(sender As Object, e As EventArgs)
+        Dim filtro As String = txtBuscadorTabla.Text.Trim().ToLower()
+        Dim visibles As Integer = 0
+
+        If DataGridView1.DataSource IsNot Nothing Then
+            Me.BindingContext(DataGridView1.DataSource).SuspendBinding()
+        End If
+
+        For Each row As DataGridViewRow In DataGridView1.Rows
+            If row.IsNewRow Then Continue For
+
+            If filtro = "" Then
+                row.Visible = True
+                visibles += 1
+            Else
+                Dim coincide As Boolean = False
+                For Each cell As DataGridViewCell In row.Cells
+                    If cell.Value IsNot Nothing AndAlso cell.Value.ToString().ToLower().Contains(filtro) Then
+                        coincide = True
+                        Exit For
+                    End If
+                Next
+                row.Visible = coincide
+                If coincide Then visibles += 1
+            End If
+        Next
+
+        If DataGridView1.DataSource IsNot Nothing Then
+            Me.BindingContext(DataGridView1.DataSource).ResumeBinding()
+        End If
+        lblContadorRegistros.Text = "Mostrando " & visibles.ToString("N0") & " registro(s)"
+    End Sub
+
+    Private Sub ActualizarHeaderModulo(titulo As String)
+        txtBuscadorTabla.Clear()
+        lblTituloModuloTabla.Text = titulo
+        lblContadorRegistros.Text = "Total de registros: " & DataGridView1.Rows.Count.ToString("N0")
+    End Sub
+
+
+    ' =========================================================
+    ' 9. ESTILIZACIÓN DE TABLA Y RENDERIZADO VISUAL GDI+ SUAVE
+    ' =========================================================
+    Private Sub AplicarEstiloTabla()
+        DataGridView1.AllowUserToAddRows = False
+        DataGridView1.BackgroundColor = Drawing.Color.White
+        DataGridView1.BorderStyle = BorderStyle.None
+
+        DataGridView1.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal
+        DataGridView1.GridColor = Drawing.Color.FromArgb(226, 232, 240)
+        DataGridView1.RowHeadersVisible = False
+
+        DataGridView1.EnableHeadersVisualStyles = False
+        DataGridView1.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None
+        DataGridView1.ColumnHeadersDefaultCellStyle.BackColor = ColorOscuro
+        DataGridView1.ColumnHeadersDefaultCellStyle.ForeColor = Drawing.Color.White
+        DataGridView1.ColumnHeadersDefaultCellStyle.Font = New Drawing.Font("Segoe UI", 10.0F, Drawing.FontStyle.Bold)
+        DataGridView1.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft
+        DataGridView1.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.True
+        DataGridView1.ColumnHeadersDefaultCellStyle.Padding = New Padding(8, 0, 8, 0)
+        DataGridView1.ColumnHeadersHeight = 46
+
+        DataGridView1.DefaultCellStyle.Font = New Drawing.Font("Segoe UI", 9.5F, Drawing.FontStyle.Regular)
+        DataGridView1.DefaultCellStyle.ForeColor = Drawing.Color.FromArgb(30, 41, 59)
+        DataGridView1.DefaultCellStyle.WrapMode = DataGridViewTriState.True
+        DataGridView1.DefaultCellStyle.Padding = New Padding(6, 4, 6, 4)
+        DataGridView1.DefaultCellStyle.SelectionBackColor = Drawing.Color.FromArgb(239, 246, 255)
+        DataGridView1.DefaultCellStyle.SelectionForeColor = ColorPrimario
+        DataGridView1.RowTemplate.Height = 44
+
+        DataGridView1.AlternatingRowsDefaultCellStyle.BackColor = Drawing.Color.FromArgb(248, 250, 252)
+        DataGridView1.SelectionMode = DataGridViewSelectionMode.FullRowSelect
+    End Sub
+
+    Private Sub DataGridView1_CellPainting(sender As Object, e As DataGridViewCellPaintingEventArgs) Handles DataGridView1.CellPainting
+        If e.RowIndex < 0 Then Return
+
+        ' 1. Badges nítidos y vectoriales para AWaRe
+        If DataGridView1.Columns(e.ColumnIndex).Name = "AWARE" AndAlso e.Value IsNot Nothing Then
+            e.PaintBackground(e.CellBounds, True)
+
+            Dim valor As String = e.Value.ToString().Trim().ToUpper()
+            Dim colorFondo As Drawing.Color = Drawing.Color.FromArgb(241, 245, 249)
+            Dim colorTexto As Drawing.Color = Drawing.Color.FromArgb(71, 85, 105)
+            Dim colorBorde As Drawing.Color = Drawing.Color.FromArgb(203, 213, 225)
+
+            If valor.Contains("ACCES") Then
+                colorFondo = Drawing.Color.FromArgb(220, 252, 231)
+                colorTexto = Drawing.Color.FromArgb(21, 128, 61)
+                colorBorde = Drawing.Color.FromArgb(134, 239, 172)
+            ElseIf valor.Contains("VIGILAN") OrElse valor.Contains("WATCH") Then
+                colorFondo = Drawing.Color.FromArgb(254, 243, 199)
+                colorTexto = Drawing.Color.FromArgb(180, 83, 9)
+                colorBorde = Drawing.Color.FromArgb(252, 211, 77)
+            ElseIf valor.Contains("RESERV") Then
+                colorFondo = Drawing.Color.FromArgb(254, 226, 226)
+                colorTexto = Drawing.Color.FromArgb(185, 28, 28)
+                colorBorde = Drawing.Color.FromArgb(252, 165, 165)
+            End If
+
+            Dim g As Graphics = e.Graphics
+            g.SmoothingMode = SmoothingMode.AntiAlias
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality
+            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit
+
+            Dim rectBadge As New Rectangle(e.CellBounds.X + 8, e.CellBounds.Y + 9, e.CellBounds.Width - 17, 24)
+            If rectBadge.Width > 120 Then rectBadge.Width = 120
+            rectBadge.X = e.CellBounds.X + ((e.CellBounds.Width - rectBadge.Width) \ 2)
+
+            Using path As GraphicsPath = CrearRutaRedondeada(rectBadge, 6)
+                Using brushFondo As New SolidBrush(colorFondo)
+                    g.FillPath(brushFondo, path)
+                End Using
+                Using penBadge As New Pen(colorBorde, 1.0F)
+                    g.DrawPath(penBadge, path)
+                End Using
+            End Using
+
+            Dim fuenteBadge As New Font("Segoe UI", 8.5F, FontStyle.Bold)
+            Dim sf As New StringFormat With {.Alignment = StringAlignment.Center, .LineAlignment = StringAlignment.Center}
+            Using brushTxt As New SolidBrush(colorTexto)
+                g.DrawString(valor, fuenteBadge, brushTxt, rectBadge, sf)
+            End Using
+
+            e.Handled = True
+            Return
+        End If
+
+        ' 2. Botón de Revertir / Eliminar limpio con renderizado vectorial
+        If DataGridView1.Columns(e.ColumnIndex).Name = "AccionRevertir" Then
+            e.PaintBackground(e.CellBounds, True)
+
+            Dim g As Graphics = e.Graphics
+            g.SmoothingMode = SmoothingMode.AntiAlias
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality
+            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit
+
+            Dim rectBtn As New Rectangle(e.CellBounds.X + 8, e.CellBounds.Y + 9, e.CellBounds.Width - 17, 25)
+            If rectBtn.Width > 115 Then rectBtn.Width = 115
+            rectBtn.X = e.CellBounds.X + ((e.CellBounds.Width - rectBtn.Width) \ 2)
+
+            Using path As GraphicsPath = CrearRutaRedondeada(rectBtn, 6)
+                Using brushFondo As New SolidBrush(Drawing.Color.FromArgb(254, 242, 242))
+                    g.FillPath(brushFondo, path)
+                End Using
+                Using penBtn As New Pen(Drawing.Color.FromArgb(254, 202, 202), 1.0F)
+                    g.DrawPath(penBtn, path)
+                End Using
+            End Using
+
+            Dim textoBtn As String = If(DataGridView1.Columns.Contains("Surtido"), "✖ Revertir", "✖ Eliminar")
+            Dim fBtn As New Font("Segoe UI", 8.5F, FontStyle.Bold)
+            Dim sfBtn As New StringFormat With {.Alignment = StringAlignment.Center, .LineAlignment = StringAlignment.Center}
+            Using brushTexto As New SolidBrush(Drawing.Color.FromArgb(220, 38, 38))
+                g.DrawString(textoBtn, fBtn, brushTexto, rectBtn, sfBtn)
+            End Using
+
+            e.Handled = True
+            Return
+        End If
+    End Sub
+
+
+    ' =========================================================
+    ' 10. PANTALLA: MÓDULO AWARE (BOTÓN 9)
     ' =========================================================
     Private Sub ConfigurarPantallaAware()
         panelAware.Dock = DockStyle.Fill
-        panelAware.BackColor = Drawing.Color.FromArgb(248, 249, 250)
+        panelAware.BackColor = Drawing.Color.FromArgb(248, 250, 252)
         panelAware.AutoScroll = True
         pnlContenedorVistas.Controls.Add(panelAware)
         HabilitarDobleBuffer(panelAware)
@@ -675,7 +1216,7 @@ Public Class Form1
             .Text = "📊 Monitoreo y Análisis AWaRe (Uso Racional de Antimicrobianos)",
             .Location = New Point(25, 20),
             .Font = New Drawing.Font("Segoe UI", 15.0F, Drawing.FontStyle.Bold),
-            .ForeColor = Drawing.Color.FromArgb(33, 37, 41),
+            .ForeColor = Drawing.Color.FromArgb(30, 41, 59),
             .AutoSize = True
         }
 
@@ -683,7 +1224,7 @@ Public Class Form1
             .Text = "Clasificación de consumo según directrices de la OMS y COFEPRIS: Acceso, Vigilancia y Reserva.",
             .Location = New Point(27, 50),
             .Font = New Drawing.Font("Segoe UI", 9.5F, Drawing.FontStyle.Regular),
-            .ForeColor = Drawing.Color.FromArgb(108, 117, 125),
+            .ForeColor = Drawing.Color.FromArgb(100, 116, 139),
             .AutoSize = True
         }
 
@@ -691,9 +1232,9 @@ Public Class Form1
             .Location = New Point(25, 80),
             .Size = New Size(panelAware.ClientSize.Width - 50, 55),
             .Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right,
-            .BackColor = Drawing.Color.White,
-            .BorderStyle = BorderStyle.FixedSingle
+            .BackColor = Drawing.Color.White
         }
+        RedondearPanelBorde(pnlFiltros, 12, Drawing.Color.FromArgb(226, 232, 240), 1.0F)
 
         Dim lblMes As New Label With {.Text = "Mes:", .Location = New Point(15, 17), .AutoSize = True, .Font = New Drawing.Font("Segoe UI", 10.0F, Drawing.FontStyle.Bold)}
         cmbMesAware.Items.AddRange(New String() {"TODOS", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"})
@@ -711,25 +1252,15 @@ Public Class Form1
 
         btnFiltrarAware.Text = "🔍 Actualizar Datos"
         btnFiltrarAware.Location = New Point(320, 10)
-        btnFiltrarAware.Size = New Size(170, 34)
-        btnFiltrarAware.BackColor = Drawing.Color.FromArgb(0, 102, 204)
-        btnFiltrarAware.ForeColor = Drawing.Color.White
-        btnFiltrarAware.Font = New Drawing.Font("Segoe UI", 10.0F, Drawing.FontStyle.Bold)
-        btnFiltrarAware.FlatStyle = FlatStyle.Flat
-        btnFiltrarAware.FlatAppearance.BorderSize = 0
-        btnFiltrarAware.Cursor = Cursors.Hand
-        RedondearBoton(btnFiltrarAware, 12)
+        btnFiltrarAware.Size = New Size(170, 35)
+        btnFiltrarAware.Font = New Drawing.Font("Segoe UI", 9.5F, Drawing.FontStyle.Bold)
+        EstilizarBotonSuave(btnFiltrarAware, 10, ColorPrimario, ColorPrimarioHover, Drawing.Color.White)
 
         btnImprimirAware.Text = "🖨 Imprimir Informe AWaRe"
         btnImprimirAware.Location = New Point(510, 10)
-        btnImprimirAware.Size = New Size(220, 34)
-        btnImprimirAware.BackColor = Drawing.Color.FromArgb(40, 167, 69)
-        btnImprimirAware.ForeColor = Drawing.Color.White
-        btnImprimirAware.Font = New Drawing.Font("Segoe UI", 10.0F, Drawing.FontStyle.Bold)
-        btnImprimirAware.FlatStyle = FlatStyle.Flat
-        btnImprimirAware.FlatAppearance.BorderSize = 0
-        btnImprimirAware.Cursor = Cursors.Hand
-        RedondearBoton(btnImprimirAware, 12)
+        btnImprimirAware.Size = New Size(220, 35)
+        btnImprimirAware.Font = New Drawing.Font("Segoe UI", 9.5F, Drawing.FontStyle.Bold)
+        EstilizarBotonSuave(btnImprimirAware, 10, ColorExito, ColorExitoHover, Drawing.Color.White)
 
         pnlFiltros.Controls.Add(lblMes)
         pnlFiltros.Controls.Add(cmbMesAware)
@@ -743,10 +1274,10 @@ Public Class Form1
         pnlKpisContainer.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
         pnlKpisContainer.BackColor = Drawing.Color.Transparent
 
-        cardAcceso = CrearTarjetaKpi("ACCESO (Access)", Drawing.Color.FromArgb(40, 167, 69), lblKpiAccesoNum, lblKpiAccesoPct)
-        cardVigi = CrearTarjetaKpi("VIGILANCIA (Watch)", Drawing.Color.FromArgb(243, 156, 18), lblKpiVigiNum, lblKpiVigiPct)
-        cardRes = CrearTarjetaKpi("RESERVA (Reserve)", Drawing.Color.FromArgb(220, 53, 69), lblKpiResNum, lblKpiResPct)
-        cardTot = CrearTarjetaKpi("TOTAL DISPENSADO", Drawing.Color.FromArgb(0, 102, 204), lblKpiTotalNum, lblKpiCumplimiento)
+        cardAcceso = CrearTarjetaKpi("ACCESO (Access)", ColorExito, lblKpiAccesoNum, lblKpiAccesoPct)
+        cardVigi = CrearTarjetaKpi("VIGILANCIA (Watch)", ColorAlerta, lblKpiVigiNum, lblKpiVigiPct)
+        cardRes = CrearTarjetaKpi("RESERVA (Reserve)", Drawing.Color.FromArgb(220, 38, 38), lblKpiResNum, lblKpiResPct)
+        cardTot = CrearTarjetaKpi("TOTAL DISPENSADO", ColorPrimario, lblKpiTotalNum, lblKpiCumplimiento)
 
         pnlKpisContainer.Controls.Add(cardAcceso)
         pnlKpisContainer.Controls.Add(cardVigi)
@@ -758,21 +1289,25 @@ Public Class Form1
         picGraficoAware.Size = New Size(panelAware.ClientSize.Width - 50, 110)
         picGraficoAware.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
         picGraficoAware.BackColor = Drawing.Color.White
-        picGraficoAware.BorderStyle = BorderStyle.FixedSingle
+        picGraficoAware.BorderStyle = BorderStyle.None
 
         Dim lblTitTabla As New Label With {
             .Text = "Detalle de Salidas por Medicamento y Clasificación:",
             .Location = New Point(25, 380),
             .Font = New Drawing.Font("Segoe UI", 11.0F, Drawing.FontStyle.Bold),
-            .ForeColor = Drawing.Color.FromArgb(33, 37, 41),
+            .ForeColor = Drawing.Color.FromArgb(30, 41, 59),
             .AutoSize = True
         }
 
-        dgvDetalleAware.Location = New Point(25, 410)
-        dgvDetalleAware.Size = New Size(panelAware.ClientSize.Width - 50, 240)
-        dgvDetalleAware.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
+        pnlTablaAwareContainer.Location = New Point(25, 410)
+        pnlTablaAwareContainer.Size = New Size(panelAware.ClientSize.Width - 50, 240)
+        pnlTablaAwareContainer.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
+        pnlTablaAwareContainer.BackColor = Drawing.Color.White
+        RedondearPanelBorde(pnlTablaAwareContainer, 12, Drawing.Color.FromArgb(226, 232, 240), 1.0F)
+
+        dgvDetalleAware.Dock = DockStyle.Fill
         dgvDetalleAware.BackgroundColor = Drawing.Color.White
-        dgvDetalleAware.BorderStyle = BorderStyle.FixedSingle
+        dgvDetalleAware.BorderStyle = BorderStyle.None
         dgvDetalleAware.RowHeadersVisible = False
         dgvDetalleAware.AllowUserToAddRows = False
         dgvDetalleAware.AllowUserToDeleteRows = False
@@ -780,12 +1315,22 @@ Public Class Form1
         dgvDetalleAware.SelectionMode = DataGridViewSelectionMode.FullRowSelect
         dgvDetalleAware.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill
         dgvDetalleAware.EnableHeadersVisualStyles = False
-        dgvDetalleAware.ColumnHeadersDefaultCellStyle.BackColor = Drawing.Color.FromArgb(52, 58, 64)
+        dgvDetalleAware.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None
+        dgvDetalleAware.ColumnHeadersDefaultCellStyle.BackColor = ColorOscuro
         dgvDetalleAware.ColumnHeadersDefaultCellStyle.ForeColor = Drawing.Color.White
-        dgvDetalleAware.ColumnHeadersDefaultCellStyle.Font = New Drawing.Font("Segoe UI", 9.5F, Drawing.FontStyle.Bold)
-        dgvDetalleAware.ColumnHeadersHeight = 32
-        dgvDetalleAware.DefaultCellStyle.Font = New Drawing.Font("Segoe UI", 9.0F)
-        dgvDetalleAware.AlternatingRowsDefaultCellStyle.BackColor = Drawing.Color.FromArgb(245, 245, 245)
+        dgvDetalleAware.ColumnHeadersDefaultCellStyle.Font = New Drawing.Font("Segoe UI", 10.0F, Drawing.FontStyle.Bold)
+        dgvDetalleAware.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.True
+        dgvDetalleAware.ColumnHeadersDefaultCellStyle.Padding = New Padding(8, 0, 8, 0)
+        dgvDetalleAware.ColumnHeadersHeight = 46
+        dgvDetalleAware.DefaultCellStyle.Font = New Drawing.Font("Segoe UI", 9.5F, Drawing.FontStyle.Regular)
+        dgvDetalleAware.DefaultCellStyle.ForeColor = Drawing.Color.FromArgb(30, 41, 59)
+        dgvDetalleAware.DefaultCellStyle.WrapMode = DataGridViewTriState.True
+        dgvDetalleAware.DefaultCellStyle.Padding = New Padding(6, 4, 6, 4)
+        dgvDetalleAware.RowTemplate.Height = 44
+        dgvDetalleAware.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal
+        dgvDetalleAware.GridColor = Drawing.Color.FromArgb(226, 232, 240)
+        dgvDetalleAware.AlternatingRowsDefaultCellStyle.BackColor = Drawing.Color.FromArgb(248, 250, 252)
+        pnlTablaAwareContainer.Controls.Add(dgvDetalleAware)
 
         panelAware.Controls.Add(lblTitulo)
         panelAware.Controls.Add(lblSubtitulo)
@@ -793,7 +1338,7 @@ Public Class Form1
         panelAware.Controls.Add(pnlKpisContainer)
         panelAware.Controls.Add(picGraficoAware)
         panelAware.Controls.Add(lblTitTabla)
-        panelAware.Controls.Add(dgvDetalleAware)
+        panelAware.Controls.Add(pnlTablaAwareContainer)
     End Sub
 
     Private Sub AjustarTarjetasKpi()
@@ -816,32 +1361,32 @@ Public Class Form1
 
     Private Function CrearTarjetaKpi(titulo As String, colorCabecera As Drawing.Color, ByRef lblNum As Label, ByRef lblSub As Label) As Panel
         Dim pnl As New Panel With {
-            .BackColor = Drawing.Color.White,
-            .BorderStyle = BorderStyle.FixedSingle
+            .BackColor = Drawing.Color.White
         }
+        RedondearPanelBorde(pnl, 12, Drawing.Color.FromArgb(226, 232, 240), 1.2F)
 
         Dim header As New Label With {
             .Text = titulo,
             .Dock = DockStyle.Top,
-            .Height = 26,
+            .Height = 28,
             .BackColor = colorCabecera,
             .ForeColor = Drawing.Color.White,
-            .Font = New Drawing.Font("Segoe UI", 8.5F, Drawing.FontStyle.Bold),
+            .Font = New Drawing.Font("Segoe UI", 9.0F, Drawing.FontStyle.Bold),
             .TextAlign = ContentAlignment.MiddleCenter
         }
 
         lblNum.Text = "0 cajas"
-        lblNum.Font = New Drawing.Font("Segoe UI", 15.0F, Drawing.FontStyle.Bold)
-        lblNum.ForeColor = Drawing.Color.FromArgb(33, 37, 41)
+        lblNum.Font = New Drawing.Font("Segoe UI", 16.0F, Drawing.FontStyle.Bold)
+        lblNum.ForeColor = Drawing.Color.FromArgb(30, 41, 59)
         lblNum.TextAlign = ContentAlignment.MiddleCenter
         lblNum.Dock = DockStyle.Fill
 
         lblSub.Text = "0.0% del total"
-        lblSub.Font = New Drawing.Font("Segoe UI", 8.5F, Drawing.FontStyle.Regular)
-        lblSub.ForeColor = Drawing.Color.FromArgb(108, 117, 125)
+        lblSub.Font = New Drawing.Font("Segoe UI", 9.0F, Drawing.FontStyle.Bold)
+        lblSub.ForeColor = Drawing.Color.FromArgb(100, 116, 139)
         lblSub.TextAlign = ContentAlignment.MiddleCenter
         lblSub.Dock = DockStyle.Bottom
-        lblSub.Height = 24
+        lblSub.Height = 26
 
         pnl.Controls.Add(lblNum)
         pnl.Controls.Add(lblSub)
@@ -955,10 +1500,10 @@ Public Class Form1
         lblKpiTotalNum.Text = totalAware.ToString("N0") & " cajas"
         If pctAcc >= 60.0 Then
             lblKpiCumplimiento.Text = "✔ Meta OMS Cumplida (≥60%)"
-            lblKpiCumplimiento.ForeColor = Drawing.Color.FromArgb(40, 167, 69)
+            lblKpiCumplimiento.ForeColor = ColorExito
         Else
             lblKpiCumplimiento.Text = "⚠ Meta OMS: < 60% Acceso"
-            lblKpiCumplimiento.ForeColor = Drawing.Color.FromArgb(220, 53, 69)
+            lblKpiCumplimiento.ForeColor = Drawing.Color.FromArgb(220, 38, 38)
         End If
 
         picGraficoAware.Invalidate()
@@ -967,6 +1512,17 @@ Public Class Form1
     Private Sub picGraficoAware_Paint(sender As Object, e As PaintEventArgs) Handles picGraficoAware.Paint
         Dim g As Graphics = e.Graphics
         g.SmoothingMode = SmoothingMode.AntiAlias
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality
+        g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit
+
+        Using pathBox As GraphicsPath = CrearRutaRedondeada(New Rectangle(0, 0, picGraficoAware.Width - 1, picGraficoAware.Height - 1), 12)
+            Using brushFondo As New SolidBrush(Drawing.Color.White)
+                g.FillPath(brushFondo, pathBox)
+            End Using
+            Using penBox As New Pen(Drawing.Color.FromArgb(226, 232, 240), 1.0F)
+                g.DrawPath(penBox, pathBox)
+            End Using
+        End Using
 
         Dim anchoGrafico As Integer = picGraficoAware.Width - 60
         Dim altoBarra As Integer = 32
@@ -980,7 +1536,7 @@ Public Class Form1
         g.DrawString("Distribución Porcentual del Consumo de Antibióticos:", fuenteTit, Brushes.Black, xInicio, 12)
 
         If totalAware = 0 Then
-            g.FillRectangle(New SolidBrush(Drawing.Color.FromArgb(230, 230, 230)), xInicio, yBarra, anchoGrafico, altoBarra)
+            g.FillRectangle(New SolidBrush(Drawing.Color.FromArgb(241, 245, 249)), xInicio, yBarra, anchoGrafico, altoBarra)
             g.DrawString("Sin registros de salidas para el periodo seleccionado.", fuenteLeyenda, Brushes.Gray, xInicio + 15, yBarra + 8)
             Return
         End If
@@ -1000,9 +1556,9 @@ Public Class Form1
         Dim rectVig As New Rectangle(xInicio + wAcc, yBarra, wVig, altoBarra)
         Dim rectRes As New Rectangle(xInicio + wAcc + wVig, yBarra, wRes, altoBarra)
 
-        Dim brushAcc As New SolidBrush(Drawing.Color.FromArgb(40, 167, 69))
-        Dim brushVig As New SolidBrush(Drawing.Color.FromArgb(243, 156, 18))
-        Dim brushRes As New SolidBrush(Drawing.Color.FromArgb(220, 53, 69))
+        Dim brushAcc As New SolidBrush(ColorExito)
+        Dim brushVig As New SolidBrush(ColorAlerta)
+        Dim brushRes As New SolidBrush(Drawing.Color.FromArgb(220, 38, 38))
 
         If wAcc > 0 Then
             g.FillRectangle(brushAcc, rectAcc)
@@ -1026,7 +1582,7 @@ Public Class Form1
         End If
 
         Dim xMeta60 As Integer = xInicio + CInt(anchoGrafico * 0.6)
-        Using penMeta As New Pen(Drawing.Color.FromArgb(0, 80, 160), 2) With {.DashStyle = DashStyle.Dash}
+        Using penMeta As New Pen(Drawing.Color.FromArgb(37, 99, 235), 2) With {.DashStyle = DashStyle.Dash}
             g.DrawLine(penMeta, xMeta60, yBarra - 6, xMeta60, yBarra + altoBarra + 6)
         End Using
         g.DrawString("Meta OMS (≥60%)", fuenteTexto, Brushes.DarkBlue, xMeta60 - 45, yBarra - 18)
@@ -1044,7 +1600,7 @@ Public Class Form1
 
 
     ' =========================================================
-    ' 9. MOTOR DE IMPRESIÓN DEL INFORME AWARE (OFICIAL)
+    ' 11. MOTOR DE IMPRESIÓN DEL INFORME AWARE (OFICIAL Y NÍTIDO)
     ' =========================================================
     Private Sub btnImprimirAware_Click(sender As Object, e As EventArgs) Handles btnImprimirAware.Click
         If totalAware = 0 Then
@@ -1053,55 +1609,74 @@ Public Class Form1
         End If
 
         Dim vistaPrevia As New PrintPreviewDialog()
+        vistaPrevia.StartPosition = FormStartPosition.CenterScreen
         docImprimirAware.DefaultPageSettings.Landscape = False
         vistaPrevia.Document = docImprimirAware
         vistaPrevia.WindowState = FormWindowState.Maximized
-        vistaPrevia.ShowDialog()
+        vistaPrevia.ShowDialog(Me)
+    End Sub
+
+    ' EVENTO PARA RESETEAR PÁGINAS AWARE
+    Private Sub docImprimirAware_BeginPrint(sender As Object, e As PrintEventArgs) Handles docImprimirAware.BeginPrint
+        numPaginaReporte = 0
     End Sub
 
     Private Sub docImprimirAware_PrintPage(sender As Object, e As PrintPageEventArgs) Handles docImprimirAware.PrintPage
+        numPaginaReporte += 1
         Dim g As Graphics = e.Graphics
-        g.SmoothingMode = SmoothingMode.AntiAlias
 
-        Dim fTitulo As New Font("Arial", 14, FontStyle.Bold)
-        Dim fSub As New Font("Arial", 9, FontStyle.Regular)
-        Dim fSubBold As New Font("Arial", 9, FontStyle.Bold)
-        Dim fKpiTit As New Font("Arial", 8, FontStyle.Bold)
-        Dim fKpiNum As New Font("Arial", 12, FontStyle.Bold)
-        Dim fTablaHeader As New Font("Arial", 8.5F, FontStyle.Bold)
-        Dim fTabla As New Font("Arial", 8.0F, FontStyle.Regular)
-        Dim brochaNegra As New SolidBrush(Drawing.Color.Black)
+        g.SmoothingMode = SmoothingMode.AntiAlias
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality
+        g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic
+
+        Dim fTitulo As New Font("Segoe UI", 13.5F, FontStyle.Bold)
+        Dim fSub As New Font("Segoe UI", 9.0F, FontStyle.Regular)
+        Dim fSubBold As New Font("Segoe UI", 9.0F, FontStyle.Bold)
+        Dim fKpiTit As New Font("Segoe UI", 8.5F, FontStyle.Bold)
+        Dim fKpiNum As New Font("Segoe UI", 12.0F, FontStyle.Bold)
+        Dim fTablaHeader As New Font("Segoe UI", 8.5F, FontStyle.Bold)
+        Dim fTabla As New Font("Segoe UI", 8.5F, FontStyle.Regular)
+        Dim brochaNegra As New SolidBrush(Drawing.Color.FromArgb(15, 23, 42))
 
         Dim margenIzq As Integer = 50
         Dim margenDer As Integer = e.PageBounds.Width - 50
         Dim anchoDisp As Integer = margenDer - margenIzq
         Dim Y As Integer = 45
 
-        ' 1. Logotipo proporcional (cuadrado o rectangular)
         Dim xHeaderAware As Integer = margenIzq
         If picLogoConfig.Image IsNot Nothing Then
-            Dim rectLogoAware As Rectangle = CalcularRectanguloProporcional(picLogoConfig.Image, margenIzq, Y, 100, 75)
+            Dim rectLogoAware As Rectangle = CalcularRectanguloProporcional(picLogoConfig.Image, margenIzq, Y, 105, 75)
             g.DrawImage(picLogoConfig.Image, rectLogoAware)
             xHeaderAware = margenIzq + rectLogoAware.Width + 15
         End If
 
-        g.DrawString(txtNomFarmacia.Text.ToUpper(), fTitulo, brochaNegra, xHeaderAware, Y)
-        g.DrawString(txtDireccion.Text, fSub, brochaNegra, xHeaderAware, Y + 22)
-        g.DrawString("Responsable Sanitario: " & txtResponsable.Text, fSubBold, brochaNegra, xHeaderAware, Y + 38)
-        g.DrawString("INFORME DE USO RACIONAL Y CLASIFICACIÓN AWaRe (OMS)", fSubBold, New SolidBrush(Drawing.Color.FromArgb(0, 102, 204)), xHeaderAware, Y + 56)
+        Dim nomFarmaciaReporte As String = If(txtNomFarmacia.Text.Trim() <> "", txtNomFarmacia.Text.Trim().ToUpper(), "NOMBRE DE LA FARMACIA")
+        Dim dirFarmaciaReporte As String = If(txtDireccion.Text.Trim() <> "", txtDireccion.Text.Trim(), "Dirección no registrada")
+        Dim respFarmaciaReporte As String = If(txtResponsable.Text.Trim() <> "", txtResponsable.Text.Trim(), "No asignado")
+
+        g.DrawString(nomFarmaciaReporte, fTitulo, brochaNegra, xHeaderAware, Y)
+        g.DrawString(dirFarmaciaReporte, fSub, brochaNegra, xHeaderAware, Y + 22)
+        g.DrawString("Responsable Sanitario: " & respFarmaciaReporte, fSubBold, brochaNegra, xHeaderAware, Y + 38)
+        g.DrawString("INFORME DE USO RACIONAL Y CLASIFICACIÓN AWaRe (OMS)", fSubBold, New SolidBrush(ColorPrimario), xHeaderAware, Y + 56)
 
         Dim periodoStr As String = If(cmbMesAware.Text = "TODOS", "Todo el Año " & txtAnioAware.Text, "Mes: " & cmbMesAware.Text & " / " & txtAnioAware.Text)
         g.DrawString("Periodo Evaluado: " & periodoStr & " | Fecha de Emisión: " & DateTime.Now.ToString("dd/MM/yyyy HH:mm"), fSub, brochaNegra, xHeaderAware, Y + 72)
 
         Y += 95
-        g.DrawLine(Pens.DarkGray, margenIzq, Y, margenDer, Y)
+        g.DrawLine(New Pen(Drawing.Color.FromArgb(148, 163, 184), 1.2F), margenIzq, Y, margenDer, Y)
         Y += 15
 
         Dim wCard As Integer = (anchoDisp - 30) \ 4
-        DibujarKpiImpresion(g, margenIzq, Y, wCard, 55, "ACCESO", cantAcceso, (cantAcceso / totalAware) * 100, Drawing.Color.FromArgb(40, 167, 69), fKpiTit, fKpiNum, fSub)
-        DibujarKpiImpresion(g, margenIzq + wCard + 10, Y, wCard, 55, "VIGILANCIA", cantVigilancia, (cantVigilancia / totalAware) * 100, Drawing.Color.FromArgb(243, 156, 18), fKpiTit, fKpiNum, fSub)
-        DibujarKpiImpresion(g, margenIzq + (wCard * 2) + 20, Y, wCard, 55, "RESERVA", cantReserva, (cantReserva / totalAware) * 100, Drawing.Color.FromArgb(220, 53, 69), fKpiTit, fKpiNum, fSub)
-        DibujarKpiImpresion(g, margenIzq + (wCard * 3) + 30, Y, wCard, 55, "TOTAL DISPENSADO", totalAware, 100, Drawing.Color.FromArgb(0, 102, 204), fKpiTit, fKpiNum, fSub)
+
+        Dim pctAcceso As Double = If(totalAware > 0, (cantAcceso / totalAware) * 100.0, 0.0)
+        Dim pctVigi As Double = If(totalAware > 0, (cantVigilancia / totalAware) * 100.0, 0.0)
+        Dim pctRes As Double = If(totalAware > 0, (cantReserva / totalAware) * 100.0, 0.0)
+
+        DibujarKpiImpresion(g, margenIzq, Y, wCard, 55, "ACCESO", cantAcceso, pctAcceso, ColorExito, fKpiTit, fKpiNum, fSub)
+        DibujarKpiImpresion(g, margenIzq + wCard + 10, Y, wCard, 55, "VIGILANCIA", cantVigilancia, pctVigi, ColorAlerta, fKpiTit, fKpiNum, fSub)
+        DibujarKpiImpresion(g, margenIzq + (wCard * 2) + 20, Y, wCard, 55, "RESERVA", cantReserva, pctRes, Drawing.Color.FromArgb(220, 38, 38), fKpiTit, fKpiNum, fSub)
+        DibujarKpiImpresion(g, margenIzq + (wCard * 3) + 30, Y, wCard, 55, "TOTAL DISPENSADO", totalAware, 100.0, ColorPrimario, fKpiTit, fKpiNum, fSub)
 
         Y += 70
 
@@ -1118,13 +1693,13 @@ Public Class Form1
         End If
 
         If wAcc > 0 Then
-            g.FillRectangle(New SolidBrush(Drawing.Color.FromArgb(40, 167, 69)), margenIzq, Y, wAcc, 24)
+            g.FillRectangle(New SolidBrush(ColorExito), margenIzq, Y, wAcc, 24)
         End If
         If wVig > 0 Then
-            g.FillRectangle(New SolidBrush(Drawing.Color.FromArgb(243, 156, 18)), margenIzq + wAcc, Y, wVig, 24)
+            g.FillRectangle(New SolidBrush(ColorAlerta), margenIzq + wAcc, Y, wVig, 24)
         End If
         If wRes > 0 Then
-            g.FillRectangle(New SolidBrush(Drawing.Color.FromArgb(220, 53, 69)), margenIzq + wAcc + wVig, Y, wRes, 24)
+            g.FillRectangle(New SolidBrush(Drawing.Color.FromArgb(220, 38, 38)), margenIzq + wAcc + wVig, Y, wRes, 24)
         End If
 
         Dim xMeta60 As Integer = margenIzq + CInt(anchoDisp * 0.6)
@@ -1138,13 +1713,12 @@ Public Class Form1
         g.DrawString(textoCumpl, fSubBold, If(pctAcc >= 0.6, Brushes.DarkGreen, Brushes.DarkRed), margenIzq, Y)
 
         Y += 25
-        g.DrawLine(Pens.DarkGray, margenIzq, Y, margenDer, Y)
+        g.DrawLine(New Pen(Drawing.Color.FromArgb(148, 163, 184), 1.2F), margenIzq, Y, margenDer, Y)
         Y += 15
 
         g.DrawString("DETALLE DE SALIDAS REGISTRADAS POR CATEGORÍA:", fSubBold, brochaNegra, margenIzq, Y)
         Y += 20
 
-        ' Dimensiones proporcionales de la tabla AWaRe
         Dim wCatAw As Integer = CInt(anchoDisp * 0.14)
         Dim wGenAw As Integer = CInt(anchoDisp * 0.28)
         Dim wDisAw As Integer = CInt(anchoDisp * 0.18)
@@ -1159,18 +1733,18 @@ Public Class Form1
         Dim xSurAw As Integer = xPreAw + wPreAw
         Dim xPctAw As Integer = xSurAw + wSurAw
 
-        g.FillRectangle(New SolidBrush(Drawing.Color.FromArgb(235, 235, 235)), margenIzq, Y, anchoDisp, 24)
-        g.DrawRectangle(Pens.Gray, margenIzq, Y, anchoDisp, 24)
+        g.FillRectangle(New SolidBrush(Drawing.Color.FromArgb(241, 245, 249)), margenIzq, Y, anchoDisp, 26)
+        g.DrawRectangle(New Pen(Drawing.Color.FromArgb(203, 213, 225), 1.2F), margenIzq, Y, anchoDisp, 26)
 
         Dim sfHeaderAw As New StringFormat With {.Alignment = StringAlignment.Near, .LineAlignment = StringAlignment.Center}
-        g.DrawString("CATEGORÍA", fTablaHeader, brochaNegra, New RectangleF(xCatAw + 3, Y, wCatAw - 6, 24), sfHeaderAw)
-        g.DrawString("GENÉRICO", fTablaHeader, brochaNegra, New RectangleF(xGenAw + 3, Y, wGenAw - 6, 24), sfHeaderAw)
-        g.DrawString("DISTINTIVO", fTablaHeader, brochaNegra, New RectangleF(xDisAw + 3, Y, wDisAw - 6, 24), sfHeaderAw)
-        g.DrawString("PRESENTACIÓN", fTablaHeader, brochaNegra, New RectangleF(xPreAw + 3, Y, wPreAw - 6, 24), sfHeaderAw)
-        g.DrawString("SURTIDO", fTablaHeader, brochaNegra, New RectangleF(xSurAw + 3, Y, wSurAw - 6, sfHeaderAw.Alignment = StringAlignment.Far), sfHeaderAw)
-        g.DrawString("% GRUPO", fTablaHeader, brochaNegra, New RectangleF(xPctAw + 3, Y, wPctAw - 6, 24), sfHeaderAw)
+        g.DrawString("CATEGORÍA", fTablaHeader, brochaNegra, New RectangleF(xCatAw + 4, Y, wCatAw - 8, 26), sfHeaderAw)
+        g.DrawString("GENÉRICO", fTablaHeader, brochaNegra, New RectangleF(xGenAw + 4, Y, wGenAw - 8, 26), sfHeaderAw)
+        g.DrawString("DISTINTIVO", fTablaHeader, brochaNegra, New RectangleF(xDisAw + 4, Y, wDisAw - 8, 26), sfHeaderAw)
+        g.DrawString("PRESENTACIÓN", fTablaHeader, brochaNegra, New RectangleF(xPreAw + 4, Y, wPreAw - 8, 26), sfHeaderAw)
+        g.DrawString("SURTIDO", fTablaHeader, brochaNegra, New RectangleF(xSurAw + 4, Y, wSurAw - 8, 26), sfHeaderAw)
+        g.DrawString("% GRUPO", fTablaHeader, brochaNegra, New RectangleF(xPctAw + 4, Y, wPctAw - 8, 26), sfHeaderAw)
 
-        Y += 24
+        Y += 26
 
         Dim filasImpresas As Integer = 0
         For Each r As DataRow In dtDetalleAwareSource.Rows
@@ -1181,25 +1755,24 @@ Public Class Form1
             Dim surt As String = Convert.ToDouble(r("Cajas Surtidas")).ToString("N0")
             Dim pctG As String = r("% de su Grupo").ToString()
 
-            ' Autoajuste de altura completa sin cortar texto
-            Dim sfGen As SizeF = g.MeasureString(gen, fTabla, wGenAw - 6)
-            Dim sfDis As SizeF = g.MeasureString(dis, fTabla, wDisAw - 6)
-            Dim sfPre As SizeF = g.MeasureString(pre, fTabla, wPreAw - 6)
-            Dim altoFilaAw As Single = Math.Max(22.0F, Math.Max(sfGen.Height, Math.Max(sfDis.Height, sfPre.Height)) + 4.0F)
+            Dim sfGen As SizeF = g.MeasureString(gen, fTabla, wGenAw - 8)
+            Dim sfDis As SizeF = g.MeasureString(dis, fTabla, wDisAw - 8)
+            Dim sfPre As SizeF = g.MeasureString(pre, fTabla, wPreAw - 8)
+            Dim altoFilaAw As Single = Math.Max(24.0F, Math.Max(sfGen.Height, Math.Max(sfDis.Height, sfPre.Height)) + 6.0F)
 
             If Y + altoFilaAw > e.PageBounds.Height - 110 Then
                 Exit For
             End If
 
-            g.DrawString(cat, fTabla, brochaNegra, New RectangleF(xCatAw + 3, Y + 2, wCatAw - 6, altoFilaAw))
-            g.DrawString(gen, fTabla, brochaNegra, New RectangleF(xGenAw + 3, Y + 2, wGenAw - 6, altoFilaAw))
-            g.DrawString(dis, fTabla, brochaNegra, New RectangleF(xDisAw + 3, Y + 2, wDisAw - 6, altoFilaAw))
-            g.DrawString(pre, fTabla, brochaNegra, New RectangleF(xPreAw + 3, Y + 2, wPreAw - 6, altoFilaAw))
-            g.DrawString(surt, fTabla, brochaNegra, New RectangleF(xSurAw + 3, Y + 2, wSurAw - 6, altoFilaAw))
-            g.DrawString(pctG, fTabla, brochaNegra, New RectangleF(xPctAw + 3, Y + 2, wPctAw - 6, altoFilaAw))
+            g.DrawString(cat, fTabla, brochaNegra, New RectangleF(xCatAw + 4, Y + 3, wCatAw - 8, altoFilaAw))
+            g.DrawString(gen, fTabla, brochaNegra, New RectangleF(xGenAw + 4, Y + 3, wGenAw - 8, altoFilaAw))
+            g.DrawString(dis, fTabla, brochaNegra, New RectangleF(xDisAw + 4, Y + 3, wDisAw - 8, altoFilaAw))
+            g.DrawString(pre, fTabla, brochaNegra, New RectangleF(xPreAw + 4, Y + 3, wPreAw - 8, altoFilaAw))
+            g.DrawString(surt, fTabla, brochaNegra, New RectangleF(xSurAw + 4, Y + 3, wSurAw - 8, altoFilaAw))
+            g.DrawString(pctG, fTabla, brochaNegra, New RectangleF(xPctAw + 4, Y + 3, wPctAw - 8, altoFilaAw))
 
             Y += CInt(altoFilaAw)
-            g.DrawLine(Pens.Gainsboro, margenIzq, Y, margenDer, Y)
+            g.DrawLine(New Pen(Drawing.Color.FromArgb(226, 232, 240), 1.0F), margenIzq, Y, margenDer, Y)
             filasImpresas += 1
         Next
 
@@ -1208,7 +1781,7 @@ Public Class Form1
         Y += 8
 
         Dim sfCentro As New StringFormat With {.Alignment = StringAlignment.Center}
-        g.DrawString(txtResponsable.Text.ToUpper(), fSubBold, brochaNegra, e.PageBounds.Width \ 2, Y, sfCentro)
+        g.DrawString(If(txtResponsable.Text.Trim() <> "", txtResponsable.Text.Trim().ToUpper(), "RESPONSABLE SANITARIO"), fSubBold, brochaNegra, e.PageBounds.Width \ 2, Y, sfCentro)
         Y += 16
         g.DrawString("Responsable Sanitario", fSub, brochaNegra, e.PageBounds.Width \ 2, Y, sfCentro)
 
@@ -1217,18 +1790,28 @@ Public Class Form1
 
     Private Sub DibujarKpiImpresion(g As Graphics, x As Integer, y As Integer, w As Integer, h As Integer, titulo As String, total As Double, pct As Double, colorBorde As Drawing.Color, fTit As Font, fNum As Font, fSub As Font)
         g.FillRectangle(Brushes.White, x, y, w, h)
-        g.DrawRectangle(New Pen(colorBorde, 1.5F), x, y, w, h)
-        g.FillRectangle(New SolidBrush(colorBorde), x, y, w, 18)
+        Using penKpi As New Pen(colorBorde, 1.5F)
+            g.DrawRectangle(penKpi, x, y, w, h)
+        End Using
+        Using brushKpi As New SolidBrush(colorBorde)
+            g.FillRectangle(brushKpi, x, y, w, 20)
+        End Using
 
         Dim sf As New StringFormat With {.Alignment = StringAlignment.Center, .LineAlignment = StringAlignment.Center}
-        g.DrawString(titulo, fTit, Brushes.White, New RectangleF(x, y, w, 18), sf)
-        g.DrawString(total.ToString("N0") & " cajas", fNum, Brushes.Black, New RectangleF(x, y + 19, w, 20), sf)
-        g.DrawString(pct.ToString("0.0") & "% del total", fSub, Brushes.DimGray, New RectangleF(x, y + 37, w, 16), sf)
+        Using brushBlanco As New SolidBrush(Drawing.Color.White)
+            g.DrawString(titulo, fTit, brushBlanco, New RectangleF(x, y, w, 20), sf)
+        End Using
+        Using brushNegro As New SolidBrush(Drawing.Color.FromArgb(15, 23, 42))
+            g.DrawString(total.ToString("N0") & " cajas", fNum, brushNegro, New RectangleF(x, y + 21, w, 20), sf)
+        End Using
+        Using brushGris As New SolidBrush(Drawing.Color.DimGray)
+            g.DrawString(pct.ToString("0.0") & "% del total", fSub, brushGris, New RectangleF(x, y + 38, w, 16), sf)
+        End Using
     End Sub
 
 
     ' =========================================================
-    ' 10. PANTALLA DE REPORTES REGULARES
+    ' 12. PANTALLA DE REPORTES REGULARES Y KARDEX
     ' =========================================================
     Private Sub ConfigurarPantallaReportes()
         panelReportes.Dock = DockStyle.Fill
@@ -1240,13 +1823,16 @@ Public Class Form1
         Dim lblTitulo As New Label With {.Text = "Generador de Reportes (Bitácora Oficial)", .Location = New Point(35, 25), .Font = New Drawing.Font("Segoe UI", 16.0F, Drawing.FontStyle.Bold), .AutoSize = True}
 
         Dim lblMod As New Label With {.Text = "Módulo a imprimir:", .Location = New Point(35, 80), .AutoSize = True, .Font = New Drawing.Font("Segoe UI", 11.0F)}
-        cmbModuloRep.Items.AddRange(New String() {"Entradas", "Salidas"})
+        cmbModuloRep.Items.Clear()
+        cmbModuloRep.Items.AddRange(New String() {"Entradas", "Salidas", "Kardex Combinado (Entradas y Salidas)"})
+        cmbModuloRep.SelectedIndex = 2
         cmbModuloRep.Location = New Point(200, 78)
-        cmbModuloRep.Size = New Size(200, 30)
-        cmbModuloRep.Font = New Drawing.Font("Segoe UI", 11.0F)
+        cmbModuloRep.Size = New Size(280, 30)
+        cmbModuloRep.Font = New Drawing.Font("Segoe UI", 10.5F)
         cmbModuloRep.DropDownStyle = ComboBoxStyle.DropDownList
 
         Dim lblMes As New Label With {.Text = "Mes (MM):", .Location = New Point(35, 130), .AutoSize = True, .Font = New Drawing.Font("Segoe UI", 11.0F)}
+        cmbMesRep.Items.Clear()
         cmbMesRep.Items.AddRange(New String() {"01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"})
         cmbMesRep.Location = New Point(200, 128)
         cmbMesRep.Size = New Size(100, 30)
@@ -1261,14 +1847,9 @@ Public Class Form1
 
         btnGenerarRep.Text = "🖨 Vista Previa e Imprimir"
         btnGenerarRep.Location = New Point(35, 240)
-        btnGenerarRep.Size = New Size(365, 48)
-        btnGenerarRep.BackColor = Drawing.Color.FromArgb(0, 102, 204)
-        btnGenerarRep.ForeColor = Drawing.Color.White
-        btnGenerarRep.Font = New Drawing.Font("Segoe UI", 12.0F, Drawing.FontStyle.Bold)
-        btnGenerarRep.FlatStyle = FlatStyle.Flat
-        btnGenerarRep.FlatAppearance.BorderSize = 0
-        btnGenerarRep.Cursor = Cursors.Hand
-        RedondearBoton(btnGenerarRep, 16)
+        btnGenerarRep.Size = New Size(445, 48)
+        btnGenerarRep.Font = New Drawing.Font("Segoe UI", 11.5F, Drawing.FontStyle.Bold)
+        EstilizarBotonSuave(btnGenerarRep, 14, ColorPrimario, ColorPrimarioHover, Drawing.Color.White)
 
         panelReportes.Controls.Add(lblTitulo)
         panelReportes.Controls.Add(lblMod)
@@ -1293,14 +1874,21 @@ Public Class Form1
             conexion.Open()
             Dim consulta As String = ""
 
-            If cmbModuloRep.Text = "Salidas" Then
+            If cmbModuloRep.Text.Contains("Kardex") Then
+                consulta = "SELECT 'ENTRADA' AS TipoMov, E.Id, E.Fecha, E.Codigo, E.Generico, E.Distintivo, E.Presentacion, E.AWARE, E.Lote, E.Caducidad, E.Existencia, E.Surtido, E.Saldo, E.Factura AS RefDoc, E.Proveedor AS NomTercero, P.RFC AS RFCTercero, P.Direccion AS DirTercero " &
+                           "FROM Entradas E LEFT JOIN Proveedores P ON TRIM(E.Proveedor) = TRIM(P.Proveedor) WHERE E.Fecha LIKE @filtro " &
+                           "UNION ALL " &
+                           "SELECT 'SALIDA' AS TipoMov, S.Id, S.Fecha, S.Codigo, S.Generico, S.Distintivo, S.Presentacion, S.AWARE, S.Lote, S.Caducidad, S.Existencia, S.Surtido, S.Saldo, (S.Movimiento || ' Fol:' || S.Folio) AS RefDoc, M.NombreMed AS NomTercero, M.Cedula AS RFCTercero, (M.Calle || ' ' || M.NoExt || ', ' || M.Colonia || ', ' || M.Ciudad) AS DirTercero " &
+                           "FROM Salidas S LEFT JOIN Medicos M ON TRIM(S.Cedula) = TRIM(M.Cedula) WHERE S.Fecha LIKE @filtro " &
+                           "ORDER BY Codigo ASC, Fecha ASC, TipoMov ASC"
+            ElseIf cmbModuloRep.Text = "Salidas" Then
                 consulta = "SELECT S.*, M.NombreMed, M.Calle, M.NoInt, M.NoExt, M.Colonia, M.Ciudad, M.Estado, M.CP, M.Pais, M.Tel AS TelMed " &
                            "FROM Salidas S LEFT JOIN Medicos M ON TRIM(S.Cedula) = TRIM(M.Cedula) " &
-                           "WHERE S.Fecha LIKE @filtro"
+                           "WHERE S.Fecha LIKE @filtro ORDER BY Codigo ASC, Fecha ASC"
             Else
                 consulta = "SELECT E.*, P.RFC AS RFCProv, P.Direccion AS DirProv " &
                            "FROM Entradas E LEFT JOIN Proveedores P ON TRIM(E.Proveedor) = TRIM(P.Proveedor) " &
-                           "WHERE E.Fecha LIKE @filtro"
+                           "WHERE E.Fecha LIKE @filtro ORDER BY Codigo ASC, Fecha ASC"
             End If
 
             Using comando As New SQLiteCommand(consulta, conexion)
@@ -1317,39 +1905,55 @@ Public Class Form1
         End If
 
         Dim vistaPrevia As New PrintPreviewDialog()
+        vistaPrevia.StartPosition = FormStartPosition.CenterScreen
         docImprimir.DefaultPageSettings.Landscape = True
         vistaPrevia.Document = docImprimir
         vistaPrevia.WindowState = FormWindowState.Maximized
-        vistaPrevia.ShowDialog()
-    End Sub
-
-    Private Sub docImprimir_BeginPrint(sender As Object, e As PrintEventArgs) Handles docImprimir.BeginPrint
-        indiceImpresion = 0
-        numPaginaReporte = 0
+        vistaPrevia.ShowDialog(Me)
     End Sub
 
     ' =========================================================================
-    ' MOTOR DE IMPRESIÓN OFICIAL: AUTOAJUSTE DE LOTES LARGOS Y TODA LA INFORMACIÓN
+    ' EVENTO: REINICIO DE CONTADORES ANTES DE GENERAR REPORTE O VISTA PREVIA
+    ' =========================================================================
+    Private Sub docImprimir_BeginPrint(sender As Object, e As Printing.PrintEventArgs) Handles docImprimir.BeginPrint
+        numPaginaReporte = 0
+        indiceImpresion = 0
+        codigoActualGrupo = ""
+    End Sub
+
+    ' =========================================================================
+    ' MOTOR DE IMPRESIÓN OFICIAL: AGRUPADO, ULTRA COMPACTO, AWARE Y NÍTIDO
     ' =========================================================================
     Private Sub docImprimir_PrintPage(sender As Object, e As PrintPageEventArgs) Handles docImprimir.PrintPage
         numPaginaReporte += 1
         Dim g As Graphics = e.Graphics
-        g.SmoothingMode = SmoothingMode.AntiAlias
 
-        Dim fuenteTitulo As New Font("Segoe UI", 13, FontStyle.Bold)
+        ' Alta calidad de renderizado vectorial
+        g.SmoothingMode = SmoothingMode.AntiAlias
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality
+        g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic
+
+        ' Fuentes para cabeceras y pie
+        Dim fuenteTitulo As New Font("Segoe UI", 12.0F, FontStyle.Bold)
         Dim fuenteSub As New Font("Segoe UI", 8.5F, FontStyle.Regular)
         Dim fuenteSubBold As New Font("Segoe UI", 8.5F, FontStyle.Bold)
-        Dim fuenteTablaHeader As New Font("Segoe UI", 7.5F, FontStyle.Bold)
-        Dim fuenteTabla As New Font("Segoe UI", 7.5F, FontStyle.Regular)
-        Dim brochaNegra As New SolidBrush(Drawing.Color.Black)
-        Dim brochaAzul As New SolidBrush(Drawing.Color.FromArgb(0, 102, 204))
+
+        ' FUENTES DE TABLA ULTRA REDUCIDAS (Para máxima densidad de información)
+        Dim fuenteTablaHeader As New Font("Segoe UI", 7.0F, FontStyle.Bold)
+        Dim fuenteTabla As New Font("Segoe UI", 6.5F, FontStyle.Regular)
+        Dim fuenteGrupo As New Font("Segoe UI", 7.0F, FontStyle.Bold)
+        Dim fuenteAware As New Font("Segoe UI", 6.5F, FontStyle.Bold)
+
+        Dim brochaNegra As New SolidBrush(Drawing.Color.FromArgb(15, 23, 42))
+        Dim brochaAzul As New SolidBrush(ColorPrimario)
 
         Dim margenIzq As Integer = 35
         Dim margenDer As Integer = e.PageBounds.Width - 35
         Dim anchoTotal As Integer = margenDer - margenIzq
         Dim Y As Integer = 35
 
-        ' 1. Logotipo proporcional (cuadrado o rectangular)
+        ' --- CABECERA DEL REPORTE ---
         Dim xHeader As Integer = margenIzq
         If picLogoConfig.Image IsNot Nothing Then
             Dim rectLogo As Rectangle = CalcularRectanguloProporcional(picLogoConfig.Image, margenIzq, Y, 110, 75)
@@ -1357,232 +1961,265 @@ Public Class Form1
             xHeader = margenIzq + rectLogo.Width + 15
         End If
 
-        g.DrawString(txtNomFarmacia.Text.Trim().ToUpper(), fuenteTitulo, brochaAzul, xHeader, Y)
-        g.DrawString(txtDireccion.Text.Trim(), fuenteSub, brochaNegra, xHeader, Y + 22)
-        g.DrawString("Responsable Sanitario: " & txtResponsable.Text.Trim(), fuenteSubBold, brochaNegra, xHeader, Y + 37)
-        g.DrawString("BITÁCORA OFICIAL DE CONTROL DE GRUPO IV - " & cmbModuloRep.Text.ToUpper(), fuenteSubBold, brochaNegra, xHeader, Y + 52)
+        Dim nomFarmaciaReporte As String = If(txtNomFarmacia.Text.Trim() <> "", txtNomFarmacia.Text.Trim().ToUpper(), "NOMBRE DE LA FARMACIA")
+        Dim dirFarmaciaReporte As String = If(txtDireccion.Text.Trim() <> "", txtDireccion.Text.Trim(), "Dirección no registrada")
+        Dim respFarmaciaReporte As String = If(txtResponsable.Text.Trim() <> "", txtResponsable.Text.Trim(), "No asignado")
 
-        Dim strPeriodo As String = "Periodo: " & cmbMesRep.Text & "/" & txtAnioRep.Text & " | Emisión: " & DateTime.Now.ToString("dd/MM/yyyy HH:mm") & " | Pág. " & numPaginaReporte.ToString()
-        g.DrawString(strPeriodo, fuenteSub, Brushes.DimGray, xHeader, Y + 67)
+        g.DrawString(nomFarmaciaReporte, fuenteTitulo, brochaAzul, xHeader, Y)
+        g.DrawString(dirFarmaciaReporte, fuenteSub, brochaNegra, xHeader, Y + 18)
+        g.DrawString("Responsable Sanitario: " & respFarmaciaReporte, fuenteSubBold, brochaNegra, xHeader, Y + 32)
 
-        Y += 85
-        g.DrawLine(New Pen(Drawing.Color.FromArgb(0, 102, 204), 1.5F), margenIzq, Y, margenDer, Y)
-        Y += 8
+        Dim tituloBitacora As String = "BITÁCORA OFICIAL DE CONTROL DE GRUPO IV - ANTIMICROBIANOS"
+        g.DrawString(tituloBitacora, fuenteSubBold, brochaNegra, xHeader, Y + 48)
 
-        ' 2. Dimensiones proporcionales calculadas con mayor espacio para lotes largos
-        Dim wFecha As Integer = CInt(anchoTotal * 0.065)
-        Dim wCodigo As Integer = CInt(anchoTotal * 0.06)
-        Dim wMedicamento As Integer = CInt(anchoTotal * (If(cmbModuloRep.Text = "Entradas", 0.23, 0.21)))
-        Dim wLoteCad As Integer = CInt(anchoTotal * 0.11) ' Ampliado a 11% para lotes largos sin apretar
-        Dim wStock As Integer = CInt(anchoTotal * 0.105)
-        Dim wMovFac As Integer = CInt(anchoTotal * (If(cmbModuloRep.Text = "Entradas", 0.105, 0.095)))
-        Dim wTercero As Integer = anchoTotal - (wFecha + wCodigo + wMedicamento + wLoteCad + wStock + wMovFac)
+        ' Regresa el Subtítulo a Mes/Año
+        Dim strPeriodo As String = "Periodo: Mes " & cmbMesRep.Text & " del Año " & txtAnioRep.Text & "  |  Emisión: " & DateTime.Now.ToString("dd/MM/yyyy HH:mm") & "  |  Pág. " & numPaginaReporte.ToString()
+        g.DrawString(strPeriodo, fuenteSub, Brushes.DimGray, xHeader, Y + 62)
+
+        Y += 80
+        g.DrawLine(New Pen(ColorPrimario, 1.5F), margenIzq, Y, margenDer, Y)
+        Y += 4
+
+        ' --- CÁLCULO DE COLUMNAS ULTRA OPTIMIZADO ---
+        Dim wFecha As Integer = CInt(anchoTotal * 0.1)
+        Dim wLoteCad As Integer = CInt(anchoTotal * 0.16)
+        Dim wStock As Integer = CInt(anchoTotal * 0.16)
+        Dim wMovFac As Integer = CInt(anchoTotal * 0.2)
+        Dim wTercero As Integer = anchoTotal - (wFecha + wLoteCad + wStock + wMovFac)
 
         Dim xFecha As Integer = margenIzq
-        Dim xCodigo As Integer = xFecha + wFecha
-        Dim xMed As Integer = xCodigo + wCodigo
-        Dim xLote As Integer = xMed + wMedicamento
+        Dim xLote As Integer = xFecha + wFecha
         Dim xStock As Integer = xLote + wLoteCad
         Dim xMovFac As Integer = xStock + wStock
         Dim xTercero As Integer = xMovFac + wMovFac
 
-        Dim altoHeader As Integer = 28
-        g.FillRectangle(New SolidBrush(Drawing.Color.FromArgb(235, 240, 248)), margenIzq, Y, anchoTotal, altoHeader)
-        g.DrawRectangle(Pens.LightGray, margenIzq, Y, anchoTotal, altoHeader)
+        ' --- ENCABEZADOS DE TABLA ---
+        Dim altoHeader As Integer = 18
+        g.FillRectangle(New SolidBrush(Drawing.Color.FromArgb(241, 245, 249)), margenIzq, Y, anchoTotal, altoHeader)
+        g.DrawRectangle(New Pen(Drawing.Color.FromArgb(203, 213, 225), 1.2F), margenIzq, Y, anchoTotal, altoHeader)
 
         Dim sfHeader As New StringFormat With {.Alignment = StringAlignment.Near, .LineAlignment = StringAlignment.Center}
 
-        ' Dibujar títulos con cajas delimitadoras RectangleF
-        g.DrawString("FECHA", fuenteTablaHeader, brochaNegra, New RectangleF(xFecha + 3, Y, wFecha - 6, altoHeader), sfHeader)
-        g.DrawString("CÓDIGO", fuenteTablaHeader, brochaNegra, New RectangleF(xCodigo + 3, Y, wCodigo - 6, altoHeader), sfHeader)
-        g.DrawString("MEDICAMENTO (GENÉRICO / DIST. / AWARE)", fuenteTablaHeader, brochaNegra, New RectangleF(xMed + 3, Y, wMedicamento - 6, altoHeader), sfHeader)
-        g.DrawString("LOTE / CADUCIDAD", fuenteTablaHeader, brochaNegra, New RectangleF(xLote + 3, Y, wLoteCad - 6, altoHeader), sfHeader)
-        g.DrawString("EXIST / CANT / SALDO", fuenteTablaHeader, brochaNegra, New RectangleF(xStock + 3, Y, wStock - 6, altoHeader), sfHeader)
+        g.DrawString("FECHA / HORA", fuenteTablaHeader, brochaNegra, New RectangleF(xFecha + 2, Y, wFecha - 4, altoHeader), sfHeader)
+        g.DrawString("LOTE Y CADUCIDAD", fuenteTablaHeader, brochaNegra, New RectangleF(xLote + 2, Y, wLoteCad - 4, altoHeader), sfHeader)
+        g.DrawString("EXIST. / MOV. / SALDO", fuenteTablaHeader, brochaNegra, New RectangleF(xStock + 2, Y, wStock - 4, altoHeader), sfHeader)
 
-        If cmbModuloRep.Text = "Entradas" Then
-            g.DrawString("FACTURA", fuenteTablaHeader, brochaNegra, New RectangleF(xMovFac + 3, Y, wMovFac - 6, altoHeader), sfHeader)
-            g.DrawString("PROVEEDOR (RAZÓN SOCIAL, RFC, DIRECCIÓN)", fuenteTablaHeader, brochaNegra, New RectangleF(xTercero + 3, Y, wTercero - 6, altoHeader), sfHeader)
+        If cmbModuloRep.Text.Contains("Kardex") Then
+            g.DrawString("MOVIMIENTO / FOLIO", fuenteTablaHeader, brochaNegra, New RectangleF(xMovFac + 2, Y, wMovFac - 4, altoHeader), sfHeader)
+            g.DrawString("PROVEEDOR / MÉDICO PRESCRIPTOR", fuenteTablaHeader, brochaNegra, New RectangleF(xTercero + 2, Y, wTercero - 4, altoHeader), sfHeader)
+        ElseIf cmbModuloRep.Text = "Entradas" Then
+            g.DrawString("MOVIMIENTO / FACTURA", fuenteTablaHeader, brochaNegra, New RectangleF(xMovFac + 2, Y, wMovFac - 4, altoHeader), sfHeader)
+            g.DrawString("PROVEEDOR (RAZÓN SOCIAL, RFC Y DIR.)", fuenteTablaHeader, brochaNegra, New RectangleF(xTercero + 2, Y, wTercero - 4, altoHeader), sfHeader)
         Else
-            g.DrawString("MOV. / FOLIO", fuenteTablaHeader, brochaNegra, New RectangleF(xMovFac + 3, Y, wMovFac - 6, altoHeader), sfHeader)
-            g.DrawString("MÉDICO PRESCRIPTOR (DATOS COMPLETOS)", fuenteTablaHeader, brochaNegra, New RectangleF(xTercero + 3, Y, wTercero - 6, altoHeader), sfHeader)
+            g.DrawString("MOVIMIENTO / FOLIO", fuenteTablaHeader, brochaNegra, New RectangleF(xMovFac + 2, Y, wMovFac - 4, altoHeader), sfHeader)
+            g.DrawString("MÉDICO PRESCRIPTOR (DATOS COMPLETOS)", fuenteTablaHeader, brochaNegra, New RectangleF(xTercero + 2, Y, wTercero - 4, altoHeader), sfHeader)
         End If
 
-        ' Líneas divisorias de columnas en encabezados
-        g.DrawLine(Pens.LightGray, xCodigo, Y, xCodigo, Y + altoHeader)
-        g.DrawLine(Pens.LightGray, xMed, Y, xMed, Y + altoHeader)
-        g.DrawLine(Pens.LightGray, xLote, Y, xLote, Y + altoHeader)
-        g.DrawLine(Pens.LightGray, xStock, Y, xStock, Y + altoHeader)
-        g.DrawLine(Pens.LightGray, xMovFac, Y, xMovFac, Y + altoHeader)
-        g.DrawLine(Pens.LightGray, xTercero, Y, xTercero, Y + altoHeader)
-
+        Dim penGrid As New Pen(Drawing.Color.FromArgb(203, 213, 225), 1.0F)
         Y += altoHeader
 
-        ' 3. Filas de Datos con autoajuste dinámico de altura considerando TODAS las columnas
+        Dim esPrimerRegistroPagina As Boolean = True
+
+        ' --- DIBUJO DE FILAS ---
         While indiceImpresion < dtImprimir.Rows.Count
             Dim fila As DataRow = dtImprimir.Rows(indiceImpresion)
-
-            Dim fechaStr As String = fila("Fecha").ToString().Split(" ")(0)
             Dim codigoStr As String = If(fila.Table.Columns.Contains("Codigo"), fila("Codigo").ToString(), "")
 
-            Dim genStr As String = fila("Generico").ToString().Trim()
-            Dim distStr As String = If(fila.Table.Columns.Contains("Distintivo"), fila("Distintivo").ToString().Trim(), "")
-            Dim presStr As String = If(fila.Table.Columns.Contains("Presentacion"), fila("Presentacion").ToString().Trim(), "")
-            Dim awareStr As String = If(fila.Table.Columns.Contains("AWARE"), fila("AWARE").ToString().Trim().ToUpper(), "")
+            ' =========================================================
+            ' LÓGICA DE AGRUPADOR AZUL CON BADGE AWARE
+            ' =========================================================
+            If codigoStr <> codigoActualGrupo OrElse esPrimerRegistroPagina Then
+                Dim genStrG As String = fila("Generico").ToString().Trim()
+                Dim distStrG As String = If(fila.Table.Columns.Contains("Distintivo"), fila("Distintivo").ToString().Trim(), "")
+                Dim presStrG As String = If(fila.Table.Columns.Contains("Presentacion"), fila("Presentacion").ToString().Trim(), "")
+                Dim awareStrG As String = If(fila.Table.Columns.Contains("AWARE"), fila("AWARE").ToString().Trim().ToUpper(), "")
 
-            Dim medCompleto As String = genStr
-            If distStr <> "" OrElse presStr <> "" Then
-                medCompleto &= vbCrLf & distStr & If(distStr <> "" AndAlso presStr <> "", " - ", "") & presStr
-            End If
-            If awareStr <> "" Then
-                medCompleto &= vbCrLf & "[" & awareStr & "]"
+                Dim tituloGrupo As String = "▶ CÓD. " & codigoStr & " | Denominación Distintiva: " & If(distStrG = "", "N/A", distStrG) & " | Denominación Genérica: " & genStrG & " | Presentación: " & presStrG
+                If codigoStr = codigoActualGrupo AndAlso esPrimerRegistroPagina Then
+                    tituloGrupo &= " (Continuación)"
+                End If
+
+                Dim espacioBlanco As Integer = If(esPrimerRegistroPagina, 0, 6)
+                Dim altoGrupo As Integer = 16
+                Dim anchoBadge As Integer = 70
+
+                If Y + espacioBlanco + altoGrupo + 18 > e.PageBounds.Height - 75 Then
+                    e.HasMorePages = True
+                    Exit While
+                End If
+
+                Y += espacioBlanco
+
+                ' Fondo de la banda azul
+                Dim rectGrupo As New RectangleF(margenIzq, Y, anchoTotal, altoGrupo)
+                g.FillRectangle(New SolidBrush(Drawing.Color.FromArgb(239, 246, 255)), rectGrupo)
+                g.DrawRectangle(New Pen(Drawing.Color.FromArgb(186, 230, 253), 1.0F), margenIzq, Y, anchoTotal, altoGrupo)
+
+                Dim sfGrupo As New StringFormat With {.Alignment = StringAlignment.Near, .LineAlignment = StringAlignment.Center}
+                g.DrawString(tituloGrupo, fuenteGrupo, brochaNegra, New RectangleF(margenIzq + 4, Y, anchoTotal - anchoBadge - 10, altoGrupo), sfGrupo)
+
+                ' Dibujo del Badge AWaRe
+                If awareStrG <> "" AndAlso awareStrG <> "NO ASIGNADO" Then
+                    Dim colorFondoAw As Drawing.Color = Drawing.Color.FromArgb(241, 245, 249)
+                    Dim colorTextoAw As Drawing.Color = Drawing.Color.FromArgb(71, 85, 105)
+                    Dim colorBordeAw As Drawing.Color = Drawing.Color.FromArgb(203, 213, 225)
+
+                    If awareStrG.Contains("ACCES") Then
+                        colorFondoAw = Drawing.Color.FromArgb(220, 252, 231)
+                        colorTextoAw = Drawing.Color.FromArgb(21, 128, 61)
+                        colorBordeAw = Drawing.Color.FromArgb(134, 239, 172)
+                    ElseIf awareStrG.Contains("VIGILAN") OrElse awareStrG.Contains("WATCH") Then
+                        colorFondoAw = Drawing.Color.FromArgb(254, 243, 199)
+                        colorTextoAw = Drawing.Color.FromArgb(180, 83, 9)
+                        colorBordeAw = Drawing.Color.FromArgb(252, 211, 77)
+                    ElseIf awareStrG.Contains("RESERV") Then
+                        colorFondoAw = Drawing.Color.FromArgb(254, 226, 226)
+                        colorTextoAw = Drawing.Color.FromArgb(185, 28, 28)
+                        colorBordeAw = Drawing.Color.FromArgb(252, 165, 165)
+                    End If
+
+                    Dim rectBadge As New Rectangle(margenDer - anchoBadge - 2, Y + 2, anchoBadge, altoGrupo - 4)
+                    Using pathBadge As Drawing2D.GraphicsPath = CrearRutaRedondeada(rectBadge, 4)
+                        Using bFondo As New SolidBrush(colorFondoAw)
+                            g.FillPath(bFondo, pathBadge)
+                        End Using
+                        Using pBorde As New Pen(colorBordeAw, 1.0F)
+                            g.DrawPath(pBorde, pathBadge)
+                        End Using
+                    End Using
+
+                    Dim sfAware As New StringFormat With {.Alignment = StringAlignment.Center, .LineAlignment = StringAlignment.Center}
+                    Using bTexto As New SolidBrush(colorTextoAw)
+                        g.DrawString(awareStrG, fuenteAware, bTexto, rectBadge, sfAware)
+                    End Using
+                End If
+
+                Y += altoGrupo
+                codigoActualGrupo = codigoStr
+                esPrimerRegistroPagina = False
             End If
 
-            ' Formateo de lote y caducidad
+            ' --- EXTRACCIÓN DE DATOS DE LA FILA ---
+            Dim fechaRaw As String = fila("Fecha").ToString()
+            Dim partesF As String() = fechaRaw.Split(" "c)
+            Dim fechaSolo As String = partesF(0)
+            Dim horaSolo As String = If(partesF.Length > 1, partesF(1) & If(partesF.Length > 2, " " & partesF(2), ""), "")
+            Dim fechaCelda As String = fechaSolo & If(horaSolo <> "", vbCrLf & horaSolo, "")
+
             Dim loteVal As String = fila("Lote").ToString().Trim()
             Dim cadVal As String = fila("Caducidad").ToString().Trim()
-            Dim loteCadStr As String = "Lot: " & loteVal & vbCrLf & "Cad: " & cadVal
+            Dim loteCadStr As String = "Lote: " & loteVal & vbCrLf & "Cad: " & cadVal
 
             Dim exisVal As Double = If(fila.Table.Columns.Contains("Existencia") AndAlso Not IsDBNull(fila("Existencia")), Convert.ToDouble(fila("Existencia")), 0)
             Dim surtVal As Double = If(fila.Table.Columns.Contains("Surtido") AndAlso Not IsDBNull(fila("Surtido")), Convert.ToDouble(fila("Surtido")), 0)
             Dim saldoVal As Double = If(fila.Table.Columns.Contains("Saldo") AndAlso Not IsDBNull(fila("Saldo")), Convert.ToDouble(fila("Saldo")), 0)
-            Dim stockStr As String = "Ant: " & exisVal.ToString("N0") & vbCrLf &
-                                     If(cmbModuloRep.Text = "Entradas", "Ent: ", "Surt: ") & surtVal.ToString("N0") & vbCrLf &
+
+            Dim esSalida As Boolean = False
+            If fila.Table.Columns.Contains("TipoMov") Then
+                esSalida = (fila("TipoMov").ToString() = "SALIDA")
+            Else
+                esSalida = (cmbModuloRep.Text = "Salidas")
+            End If
+
+            Dim stockStr As String = "Existencia: " & exisVal.ToString("N0") & vbCrLf &
+                                     If(esSalida, "Surtido: -", "Entrada: +") & surtVal.ToString("N0") & vbCrLf &
                                      "Saldo: " & saldoVal.ToString("N0")
 
             Dim movFacStr As String = ""
             Dim terceroStr As String = ""
 
-            If cmbModuloRep.Text = "Entradas" Then
-                movFacStr = "Factura:" & vbCrLf & fila("Factura").ToString().Trim()
+            If cmbModuloRep.Text.Contains("Kardex") Then
+                Dim tipo As String = fila("TipoMov").ToString()
+                Dim ref As String = fila("RefDoc").ToString().Trim()
+                movFacStr = tipo & vbCrLf & If(esSalida, "Folio: ", "Factura: ") & ref
+
+                Dim nom As String = fila("NomTercero").ToString().Trim()
+                Dim rfcCed As String = fila("RFCTercero").ToString().Trim()
+                Dim dirT As String = fila("DirTercero").ToString().Trim()
+                terceroStr = nom & If(rfcCed <> "", " (" & rfcCed & ")", "") & vbCrLf & If(dirT <> "", dirT, "S/D")
+            ElseIf cmbModuloRep.Text = "Entradas" Then
+                movFacStr = "ENTRADA" & vbCrLf & "Factura: " & fila("Factura").ToString().Trim()
+
                 Dim prov As String = fila("Proveedor").ToString().Trim()
-                Dim rfc As String = If(fila.Table.Columns.Contains("RFCProv") AndAlso fila("RFCProv").ToString().Trim() <> "",
-                                       fila("RFCProv").ToString().Trim(),
-                                       If(fila.Table.Columns.Contains("RFC"), fila("RFC").ToString().Trim(), ""))
-                Dim dirProv As String = If(fila.Table.Columns.Contains("DirProv") AndAlso fila("DirProv").ToString().Trim() <> "",
-                                           fila("DirProv").ToString().Trim(),
-                                           If(fila.Table.Columns.Contains("Direccion"), fila("Direccion").ToString().Trim(), ""))
+                Dim rfc As String = If(fila.Table.Columns.Contains("RFCProv") AndAlso fila("RFCProv").ToString().Trim() <> "", fila("RFCProv").ToString().Trim(), If(fila.Table.Columns.Contains("RFC"), fila("RFC").ToString().Trim(), ""))
+                Dim dirProv As String = If(fila.Table.Columns.Contains("DirProv") AndAlso fila("DirProv").ToString().Trim() <> "", fila("DirProv").ToString().Trim(), If(fila.Table.Columns.Contains("Direccion"), fila("Direccion").ToString().Trim(), ""))
                 terceroStr = prov & If(rfc <> "", " (RFC: " & rfc & ")", "") & vbCrLf & dirProv
             Else
-                ' MODULO SALIDAS: Ficha completa del Médico
-                Dim mov As String = If(fila.Table.Columns.Contains("Movimiento"), fila("Movimiento").ToString().Trim(), "")
+                Dim mov As String = If(fila.Table.Columns.Contains("Movimiento"), fila("Movimiento").ToString().Trim(), "SALIDA")
                 Dim fol As String = If(fila.Table.Columns.Contains("Folio"), fila("Folio").ToString().Trim(), "")
-                movFacStr = mov & vbCrLf & "Fol: " & fol
+                movFacStr = mov & vbCrLf & "Folio: " & fol
 
-                Dim nomMed As String = If(fila.Table.Columns.Contains("NombreMed") AndAlso fila("NombreMed").ToString().Trim() <> "",
-                                          fila("NombreMed").ToString().Trim(),
-                                          If(fila.Table.Columns.Contains("Nombre"), fila("Nombre").ToString().Trim(), ""))
+                Dim nomMed As String = If(fila.Table.Columns.Contains("NombreMed") AndAlso fila("NombreMed").ToString().Trim() <> "", fila("NombreMed").ToString().Trim(), If(fila.Table.Columns.Contains("Nombre"), fila("Nombre").ToString().Trim(), ""))
                 Dim cedMed As String = If(fila.Table.Columns.Contains("Cedula"), fila("Cedula").ToString().Trim(), "")
-                Dim telMed As String = If(fila.Table.Columns.Contains("TelMed") AndAlso fila("TelMed").ToString().Trim() <> "",
-                                          fila("TelMed").ToString().Trim(),
-                                          If(fila.Table.Columns.Contains("Telefono"), fila("Telefono").ToString().Trim(), ""))
-
-                Dim calle As String = If(fila.Table.Columns.Contains("Calle"), fila("Calle").ToString().Trim(), "")
-                Dim noExt As String = If(fila.Table.Columns.Contains("NoExt"), fila("NoExt").ToString().Trim(), "")
-                Dim noInt As String = If(fila.Table.Columns.Contains("NoInt"), fila("NoInt").ToString().Trim(), "")
-                Dim col As String = If(fila.Table.Columns.Contains("Colonia"), fila("Colonia").ToString().Trim(), "")
-                Dim ciudad As String = If(fila.Table.Columns.Contains("Ciudad"), fila("Ciudad").ToString().Trim(), "")
-                Dim estado As String = If(fila.Table.Columns.Contains("Estado"), fila("Estado").ToString().Trim(), "")
-                Dim cp As String = If(fila.Table.Columns.Contains("CP"), fila("CP").ToString().Trim(), "")
-
-                Dim partesDir As New List(Of String)()
-                Dim lineaCalle As String = calle
-                If noExt <> "" Then lineaCalle &= If(lineaCalle <> "", " #", "#") & noExt
-                If noInt <> "" Then lineaCalle &= If(lineaCalle <> "", " Int. ", "Int. ") & noInt
-                If lineaCalle <> "" Then partesDir.Add(lineaCalle)
-
-                If col <> "" Then partesDir.Add("Col. " & col)
-                If ciudad <> "" OrElse estado <> "" Then
-                    partesDir.Add(ciudad & If(ciudad <> "" AndAlso estado <> "", ", ", "") & estado)
-                End If
-                If cp <> "" Then partesDir.Add("C.P. " & cp)
-
-                Dim dirMed As String = ""
-                If partesDir.Count > 0 Then
-                    dirMed = String.Join(", ", partesDir)
-                Else
-                    dirMed = If(fila.Table.Columns.Contains("Direccion"), fila("Direccion").ToString().Trim(), "")
-                End If
-
-                terceroStr = nomMed & If(cedMed <> "", " (Céd: " & cedMed & ")", "") & vbCrLf &
-                             If(dirMed <> "", "Dir: " & dirMed, "Dir: S/D") &
-                             If(telMed <> "", " | Tel: " & telMed, "")
+                terceroStr = nomMed & If(cedMed <> "", " (Cédula: " & cedMed & ")", "")
             End If
 
-            ' Medir altura requerida de TODAS las columnas (incluyendo LOTE, MEDICAMENTO, MÉDICO/PROVEEDOR, STOCK)
-            Dim sfFecha As SizeF = g.MeasureString(fechaStr, fuenteTabla, wFecha - 6)
-            Dim sfCodigo As SizeF = g.MeasureString(codigoStr, fuenteTabla, wCodigo - 6)
-            Dim sfMed As SizeF = g.MeasureString(medCompleto, fuenteTabla, wMedicamento - 6)
-            Dim sfLote As SizeF = g.MeasureString(loteCadStr, fuenteTabla, wLoteCad - 6)
-            Dim sfStock As SizeF = g.MeasureString(stockStr, fuenteTabla, wStock - 6)
-            Dim sfMov As SizeF = g.MeasureString(movFacStr, fuenteTabla, wMovFac - 6)
-            Dim sfTercero As SizeF = g.MeasureString(terceroStr, fuenteTabla, wTercero - 6)
+            ' Medir altura dinámica
+            Dim sfFecha As SizeF = g.MeasureString(fechaCelda, fuenteTabla, wFecha - 4)
+            Dim sfLote As SizeF = g.MeasureString(loteCadStr, fuenteTabla, wLoteCad - 4)
+            Dim sfStock As SizeF = g.MeasureString(stockStr, fuenteTabla, wStock - 4)
+            Dim sfMov As SizeF = g.MeasureString(movFacStr, fuenteTabla, wMovFac - 4)
+            Dim sfTercero As SizeF = g.MeasureString(terceroStr, fuenteTabla, wTercero - 4)
 
-            Dim maxAlturaContenido As Single = Math.Max(sfFecha.Height,
-                                               Math.Max(sfCodigo.Height,
-                                               Math.Max(sfMed.Height,
-                                               Math.Max(sfLote.Height,
-                                               Math.Max(sfStock.Height,
-                                               Math.Max(sfMov.Height, sfTercero.Height))))))
+            Dim maxAlturaContenido As Single = Math.Max(sfFecha.Height, Math.Max(sfLote.Height, Math.Max(sfStock.Height, Math.Max(sfMov.Height, sfTercero.Height))))
 
-            Dim altoFila As Single = Math.Max(32.0F, maxAlturaContenido + 8.0F)
+            Dim altoFila As Single = Math.Max(15.0F, maxAlturaContenido + 3.0F)
 
-            ' Salto de página
-            If Y + altoFila > e.PageBounds.Height - 110 AndAlso indiceImpresion < dtImprimir.Rows.Count Then
+            If Y + altoFila > e.PageBounds.Height - 65 AndAlso indiceImpresion < dtImprimir.Rows.Count Then
                 e.HasMorePages = True
-                Return
+                Exit While
             End If
 
-            ' Dibujar datos en sus celdas delimitadas (ajuste de texto automático si el lote es largo)
-            g.DrawString(fechaStr, fuenteTabla, brochaNegra, New RectangleF(xFecha + 3, Y + 3, wFecha - 6, altoFila))
-            g.DrawString(codigoStr, fuenteTabla, brochaNegra, New RectangleF(xCodigo + 3, Y + 3, wCodigo - 6, altoFila))
-            g.DrawString(medCompleto, fuenteTabla, brochaNegra, New RectangleF(xMed + 3, Y + 3, wMedicamento - 6, altoFila))
-            g.DrawString(loteCadStr, fuenteTabla, brochaNegra, New RectangleF(xLote + 3, Y + 3, wLoteCad - 6, altoFila))
-            g.DrawString(stockStr, fuenteTabla, brochaNegra, New RectangleF(xStock + 3, Y + 3, wStock - 6, altoFila))
-            g.DrawString(movFacStr, fuenteTabla, brochaNegra, New RectangleF(xMovFac + 3, Y + 3, wMovFac - 6, altoFila))
-            g.DrawString(terceroStr, fuenteTabla, brochaNegra, New RectangleF(xTercero + 3, Y + 3, wTercero - 6, altoFila))
+            ' Dibujar textos ajustados
+            g.DrawString(fechaCelda, fuenteTabla, brochaNegra, New RectangleF(xFecha + 2, Y + 1, wFecha - 4, altoFila))
+            g.DrawString(loteCadStr, fuenteTabla, brochaNegra, New RectangleF(xLote + 2, Y + 1, wLoteCad - 4, altoFila))
+            g.DrawString(stockStr, fuenteTabla, brochaNegra, New RectangleF(xStock + 2, Y + 1, wStock - 4, altoFila))
+            g.DrawString(movFacStr, fuenteTabla, brochaNegra, New RectangleF(xMovFac + 2, Y + 1, wMovFac - 4, altoFila))
+            g.DrawString(terceroStr, fuenteTabla, brochaNegra, New RectangleF(xTercero + 2, Y + 1, wTercero - 4, altoFila))
 
-            ' Líneas divisorias de columnas en datos
-            g.DrawLine(Pens.Gainsboro, xCodigo, Y, xCodigo, Y + altoFila)
-            g.DrawLine(Pens.Gainsboro, xMed, Y, xMed, Y + altoFila)
-            g.DrawLine(Pens.Gainsboro, xLote, Y, xLote, Y + altoFila)
-            g.DrawLine(Pens.Gainsboro, xStock, Y, xStock, Y + altoFila)
-            g.DrawLine(Pens.Gainsboro, xMovFac, Y, xMovFac, Y + altoFila)
-            g.DrawLine(Pens.Gainsboro, xTercero, Y, xTercero, Y + altoFila)
+            ' Dibujar bordes separadores
+            g.DrawLine(penGrid, xLote, Y, xLote, Y + altoFila)
+            g.DrawLine(penGrid, xStock, Y, xStock, Y + altoFila)
+            g.DrawLine(penGrid, xMovFac, Y, xMovFac, Y + altoFila)
+            g.DrawLine(penGrid, xTercero, Y, xTercero, Y + altoFila)
 
             Y += CInt(altoFila)
-            g.DrawLine(Pens.Gainsboro, margenIzq, Y, margenDer, Y)
+            g.DrawLine(New Pen(Drawing.Color.FromArgb(226, 232, 240), 1.0F), margenIzq, Y, margenDer, Y)
             indiceImpresion += 1
         End While
 
-        ' 4. Firma del Responsable Sanitario en la última hoja
-        Y = Math.Max(Y + 20, e.PageBounds.Height - 90)
+        ' --- PIE DE PÁGINA (FIRMA OBLIGATORIA) ---
+        Dim yFirma As Integer = e.PageBounds.Height - 55
         Dim firmaTexto As String = "________________________________________________"
-        Dim respTexto As String = "Responsable Sanitario: " & txtResponsable.Text.Trim()
+        Dim respTexto As String = "Responsable Sanitario: " & If(txtResponsable.Text.Trim() <> "", txtResponsable.Text.Trim(), "No asignado")
 
         Dim anchoFirma As Integer = CInt(g.MeasureString(firmaTexto, fuenteSub).Width)
         Dim anchoResp As Integer = CInt(g.MeasureString(respTexto, fuenteSubBold).Width)
         Dim centroX As Integer = e.PageBounds.Width \ 2
 
-        g.DrawString(firmaTexto, fuenteSub, brochaNegra, centroX - (anchoFirma \ 2), Y)
-        Y += 16
-        g.DrawString(respTexto, fuenteSubBold, brochaNegra, centroX - (anchoResp \ 2), Y)
+        g.DrawString(firmaTexto, fuenteSub, brochaNegra, centroX - (anchoFirma \ 2), yFirma)
+        g.DrawString(respTexto, fuenteSubBold, brochaNegra, centroX - (anchoResp \ 2), yFirma + 16)
 
-        e.HasMorePages = False
-        indiceImpresion = 0
+        If Not e.HasMorePages Then
+            indiceImpresion = 0
+        End If
     End Sub
 
-
     ' =========================================================
-    ' 11. IMPORTADOR INTELIGENTE DE CSV
+    ' 13. MOTOR GENERAL DE IMPORTACIÓN CSV POR MENÚS
     ' =========================================================
     Private Sub btnImportarCSV_Click(sender As Object, e As EventArgs) Handles btnImportarCSV.Click
+        EjecutarImportadorCSVGeneral("")
+    End Sub
+
+    Private Sub EjecutarImportadorCSVGeneral(moduloSugerido As String)
         Dim dialog As New OpenFileDialog()
         dialog.Filter = "Archivos CSV de Excel (*.csv)|*.csv"
-        dialog.Title = "Selecciona tu archivo guardado como CSV"
+        dialog.Title = If(moduloSugerido <> "", "Selecciona tu archivo CSV para: " & moduloSugerido, "Selecciona tu archivo guardado como CSV")
 
-        If dialog.ShowDialog() = DialogResult.OK Then
+        If dialog.ShowDialog(Me) = DialogResult.OK Then
             Try
-                Using parser As New TextFieldParser(dialog.FileName, System.Text.Encoding.Default)
+                Using parser As New TextFieldParser(dialog.FileName, Encoding.Default)
                     parser.TextFieldType = FieldType.Delimited
                     parser.SetDelimiters(",")
 
@@ -1591,95 +2228,232 @@ Public Class Form1
                     End If
 
                     Dim encabezados As String() = parser.ReadFields()
-                    Dim encabStr As String = String.Join("", encabezados).ToUpper().Replace(" ", "")
+                    Dim encabStr As String = String.Join("", encabezados).ToUpper().Replace(" ", "").Replace("_", "").Replace(".", "")
 
                     Dim tablaDestino As String = ""
-                    Dim insertSQL As String = ""
 
-                    If encabStr.Contains("EXISTENCIA") OrElse encabStr.Contains("AWARE") Then
+                    If encabStr.Contains("FACTURA") OrElse (encabStr.Contains("SURTIDO") AndAlso encabStr.Contains("PROVEEDOR")) Then
+                        tablaDestino = "Entradas"
+                    ElseIf encabStr.Contains("RECETA") OrElse encabStr.Contains("FOLIO") OrElse (encabStr.Contains("SURTIDO") AndAlso encabStr.Contains("CEDULA")) Then
+                        tablaDestino = "Salidas"
+                    ElseIf encabStr.Contains("EXISTENCIA") OrElse encabStr.Contains("AWARE") Then
                         tablaDestino = "Inventario"
-                        insertSQL = "INSERT INTO Inventario (Codigo, Generico, Distintivo, Presentacion, AWARE, ExistenciaActual) VALUES (@p0, @p1, @p2, @p3, @p4, @p5) ON CONFLICT(Codigo) DO UPDATE SET Generico=@p1, Distintivo=@p2, Presentacion=@p3, ExistenciaActual=@p5"
                     ElseIf encabStr.Contains("RFC") AndAlso encabStr.Contains("PROVEEDOR") Then
                         tablaDestino = "Proveedores"
-                        insertSQL = "INSERT INTO Proveedores (Proveedor, RFC, Direccion) VALUES (@p0, @p1, @p2) ON CONFLICT(Proveedor) DO UPDATE SET RFC=@p1, Direccion=@p2"
                     ElseIf encabStr.Contains("CEDULA") AndAlso encabStr.Contains("NOMBREMED") Then
                         tablaDestino = "Medicos"
-                        insertSQL = "INSERT INTO Medicos (Cedula, NombreMed, Calle, NoInt, NoExt, Colonia, Ciudad, Estado, CP, Pais, Tel) VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10) ON CONFLICT(Cedula) DO UPDATE SET NombreMed=@p1, Tel=@p10"
+                    ElseIf moduloSugerido <> "" Then
+                        tablaDestino = moduloSugerido
                     Else
-                        MessageBox.Show("No reconocí el formato del archivo CSV.", "Formato Inválido", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                        MessageBox.Show("No se reconoció automáticamente el formato del archivo CSV." & vbCrLf & "Verifica las columnas correspondientes.", "Formato Inválido", MessageBoxButtons.OK, MessageBoxIcon.Warning)
                         Return
                     End If
 
-                    If MessageBox.Show("Se detectaron datos para: " & tablaDestino & "." & vbCrLf & "¿Deseas importar?", "Confirmar Importación", MessageBoxButtons.YesNo, MessageBoxIcon.Question) = DialogResult.Yes Then
+                    If MessageBox.Show("Se procesará la importación hacia el área de: " & tablaDestino.ToUpper() & "." & vbCrLf & "¿Deseas continuar?", "Confirmar Importación", MessageBoxButtons.YesNo, MessageBoxIcon.Question) = DialogResult.Yes Then
                         Dim registros As Integer = 0
+
                         Using conexion As New SQLiteConnection(cadenaConexion)
                             conexion.Open()
                             Using transaccion As SQLiteTransaction = conexion.BeginTransaction()
-                                Using comando As New SQLiteCommand(insertSQL, conexion, transaccion)
-                                    While Not parser.EndOfData
-                                        Dim datos As String() = parser.ReadFields()
-                                        If datos Is Nothing Then
-                                            Continue While
-                                        End If
 
-                                        comando.Parameters.Clear()
+                                While Not parser.EndOfData
+                                    Dim datos As String() = parser.ReadFields()
+                                    If datos Is Nothing OrElse datos.Length = 0 Then Continue While
 
-                                        If tablaDestino = "Inventario" Then
-                                            comando.Parameters.AddWithValue("@p0", If(datos.Length > 0, datos(0), ""))
-                                            comando.Parameters.AddWithValue("@p1", If(datos.Length > 1, datos(1), ""))
-                                            comando.Parameters.AddWithValue("@p2", If(datos.Length > 2, datos(2), ""))
-                                            comando.Parameters.AddWithValue("@p3", If(datos.Length > 3, datos(3), ""))
-                                            comando.Parameters.AddWithValue("@p4", If(datos.Length > 4, datos(4), ""))
-                                            comando.Parameters.AddWithValue("@p5", If(datos.Length > 5, Val(datos(5)), 0))
-                                        ElseIf tablaDestino = "Proveedores" Then
-                                            comando.Parameters.AddWithValue("@p0", If(datos.Length > 0, datos(0), ""))
-                                            comando.Parameters.AddWithValue("@p1", If(datos.Length > 1, datos(1), ""))
-                                            comando.Parameters.AddWithValue("@p2", If(datos.Length > 2, datos(2), ""))
-                                        ElseIf tablaDestino = "Medicos" Then
+                                    Select Case tablaDestino
+                                        Case "Entradas"
+                                            Dim fFecha As String = If(datos.Length > 0, datos(0), DateTime.Now.ToString("dd/MM/yyyy"))
+                                            Dim fCod As String = If(datos.Length > 1, datos(1).Trim(), "")
+                                            Dim fGen As String = If(datos.Length > 2, datos(2).Trim(), "")
+                                            Dim fDis As String = If(datos.Length > 3, datos(3).Trim(), "")
+                                            Dim fPre As String = If(datos.Length > 4, datos(4).Trim(), "")
+                                            Dim fAw As String = If(datos.Length > 5, datos(5).Trim().ToUpper(), "")
+                                            Dim fLot As String = If(datos.Length > 6, datos(6).Trim(), "")
+                                            Dim fCad As String = If(datos.Length > 7, datos(7).Trim(), "")
+                                            Dim fCant As Double = If(datos.Length > 8, Val(datos(8)), 0)
+                                            Dim fFac As String = If(datos.Length > 9, datos(9).Trim(), "")
+                                            Dim fProv As String = If(datos.Length > 10, datos(10).Trim(), "")
+                                            Dim fRfc As String = If(datos.Length > 11, datos(11).Trim(), "")
+                                            Dim fDir As String = If(datos.Length > 12, datos(12).Trim(), "")
+
+                                            If fCod = "" Then Continue While
+
+                                            Dim exisActual As Double = 0
+                                            Dim cmdEx As New SQLiteCommand("SELECT ExistenciaActual FROM Inventario WHERE Codigo = @cod", conexion, transaccion)
+                                            cmdEx.Parameters.AddWithValue("@cod", fCod)
+                                            Dim objEx = cmdEx.ExecuteScalar()
+                                            If objEx IsNot Nothing AndAlso Not IsDBNull(objEx) Then
+                                                exisActual = Convert.ToDouble(objEx)
+                                            Else
+                                                Dim cmdNuevoMed As New SQLiteCommand("INSERT INTO Inventario (Codigo, Generico, Distintivo, Presentacion, AWARE, ExistenciaActual) VALUES (@c, @g, @d, @p, @a, 0)", conexion, transaccion)
+                                                cmdNuevoMed.Parameters.AddWithValue("@c", fCod)
+                                                cmdNuevoMed.Parameters.AddWithValue("@g", fGen)
+                                                cmdNuevoMed.Parameters.AddWithValue("@d", fDis)
+                                                cmdNuevoMed.Parameters.AddWithValue("@p", fPre)
+                                                cmdNuevoMed.Parameters.AddWithValue("@a", fAw)
+                                                cmdNuevoMed.ExecuteNonQuery()
+                                            End If
+
+                                            Dim nuevoSaldo As Double = exisActual + fCant
+
+                                            Dim cmdEnt As New SQLiteCommand("INSERT INTO Entradas (Fecha, Codigo, Generico, Distintivo, Presentacion, AWARE, Lote, Caducidad, Existencia, Surtido, Saldo, Factura, Proveedor, RFC, Direccion) VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10, @p11, @p12, @p13, @p14)", conexion, transaccion)
+                                            cmdEnt.Parameters.AddWithValue("@p0", fFecha)
+                                            cmdEnt.Parameters.AddWithValue("@p1", fCod)
+                                            cmdEnt.Parameters.AddWithValue("@p2", fGen)
+                                            cmdEnt.Parameters.AddWithValue("@p3", fDis)
+                                            cmdEnt.Parameters.AddWithValue("@p4", fPre)
+                                            cmdEnt.Parameters.AddWithValue("@p5", fAw)
+                                            cmdEnt.Parameters.AddWithValue("@p6", fLot)
+                                            cmdEnt.Parameters.AddWithValue("@p7", fCad)
+                                            cmdEnt.Parameters.AddWithValue("@p8", exisActual)
+                                            cmdEnt.Parameters.AddWithValue("@p9", fCant)
+                                            cmdEnt.Parameters.AddWithValue("@p10", nuevoSaldo)
+                                            cmdEnt.Parameters.AddWithValue("@p11", fFac)
+                                            cmdEnt.Parameters.AddWithValue("@p12", fProv)
+                                            cmdEnt.Parameters.AddWithValue("@p13", fRfc)
+                                            cmdEnt.Parameters.AddWithValue("@p14", fDir)
+                                            cmdEnt.ExecuteNonQuery()
+
+                                            Dim cmdUpdStock As New SQLiteCommand("UPDATE Inventario SET ExistenciaActual = @saldo WHERE Codigo = @cod", conexion, transaccion)
+                                            cmdUpdStock.Parameters.AddWithValue("@saldo", nuevoSaldo)
+                                            cmdUpdStock.Parameters.AddWithValue("@cod", fCod)
+                                            cmdUpdStock.ExecuteNonQuery()
+
+                                        Case "Salidas"
+                                            Dim fFecha As String = If(datos.Length > 0, datos(0), DateTime.Now.ToString("dd/MM/yyyy"))
+                                            Dim fCod As String = If(datos.Length > 1, datos(1).Trim(), "")
+                                            Dim fGen As String = If(datos.Length > 2, datos(2).Trim(), "")
+                                            Dim fDis As String = If(datos.Length > 3, datos(3).Trim(), "")
+                                            Dim fPre As String = If(datos.Length > 4, datos(4).Trim(), "")
+                                            Dim fAw As String = If(datos.Length > 5, datos(5).Trim().ToUpper(), "")
+                                            Dim fLot As String = If(datos.Length > 6, datos(6).Trim(), "")
+                                            Dim fCad As String = If(datos.Length > 7, datos(7).Trim(), "")
+                                            Dim fCant As Double = If(datos.Length > 8, Val(datos(8)), 0)
+                                            Dim fMov As String = If(datos.Length > 9, datos(9).Trim(), "RECETA")
+                                            Dim fFol As String = If(datos.Length > 10, datos(10).Trim(), "")
+                                            Dim fCed As String = If(datos.Length > 11, datos(11).Trim(), "")
+                                            Dim fNom As String = If(datos.Length > 12, datos(12).Trim(), "")
+                                            Dim fDir As String = If(datos.Length > 13, datos(13).Trim(), "")
+                                            Dim fTel As String = If(datos.Length > 14, datos(14).Trim(), "")
+
+                                            If fCod = "" Then Continue While
+
+                                            Dim exisActual As Double = 0
+                                            Dim cmdEx As New SQLiteCommand("SELECT ExistenciaActual FROM Inventario WHERE Codigo = @cod", conexion, transaccion)
+                                            cmdEx.Parameters.AddWithValue("@cod", fCod)
+                                            Dim objEx = cmdEx.ExecuteScalar()
+                                            If objEx IsNot Nothing AndAlso Not IsDBNull(objEx) Then
+                                                exisActual = Convert.ToDouble(objEx)
+                                            End If
+
+                                            Dim nuevoSaldo As Double = exisActual - fCant
+
+                                            Dim cmdSal As New SQLiteCommand("INSERT INTO Salidas (Fecha, Codigo, Generico, Distintivo, Presentacion, AWARE, Lote, Caducidad, Existencia, Surtido, Saldo, Movimiento, Folio, Cedula, Nombre, Direccion, Telefono) VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10, @p11, @p12, @p13, @p14, @p15, @p16)", conexion, transaccion)
+                                            cmdSal.Parameters.AddWithValue("@p0", fFecha)
+                                            cmdSal.Parameters.AddWithValue("@p1", fCod)
+                                            cmdSal.Parameters.AddWithValue("@p2", fGen)
+                                            cmdSal.Parameters.AddWithValue("@p3", fDis)
+                                            cmdSal.Parameters.AddWithValue("@p4", fPre)
+                                            cmdSal.Parameters.AddWithValue("@p5", fAw)
+                                            cmdSal.Parameters.AddWithValue("@p6", fLot)
+                                            cmdSal.Parameters.AddWithValue("@p7", fCad)
+                                            cmdSal.Parameters.AddWithValue("@p8", exisActual)
+                                            cmdSal.Parameters.AddWithValue("@p9", fCant)
+                                            cmdSal.Parameters.AddWithValue("@p10", nuevoSaldo)
+                                            cmdSal.Parameters.AddWithValue("@p11", fMov)
+                                            cmdSal.Parameters.AddWithValue("@p12", fFol)
+                                            cmdSal.Parameters.AddWithValue("@p13", fCed)
+                                            cmdSal.Parameters.AddWithValue("@p14", fNom)
+                                            cmdSal.Parameters.AddWithValue("@p15", fDir)
+                                            cmdSal.Parameters.AddWithValue("@p16", fTel)
+                                            cmdSal.ExecuteNonQuery()
+
+                                            Dim cmdUpdStock As New SQLiteCommand("UPDATE Inventario SET ExistenciaActual = @saldo WHERE Codigo = @cod", conexion, transaccion)
+                                            cmdUpdStock.Parameters.AddWithValue("@saldo", nuevoSaldo)
+                                            cmdUpdStock.Parameters.AddWithValue("@cod", fCod)
+                                            cmdUpdStock.ExecuteNonQuery()
+
+                                        Case "Inventario"
+                                            Dim insertInv As String = "INSERT INTO Inventario (Codigo, Generico, Distintivo, Presentacion, AWARE, ExistenciaActual) VALUES (@p0, @p1, @p2, @p3, @p4, @p5) ON CONFLICT(Codigo) DO UPDATE SET Generico=@p1, Distintivo=@p2, Presentacion=@p3, AWARE=@p4, ExistenciaActual=@p5"
+                                            Dim cmdInv As New SQLiteCommand(insertInv, conexion, transaccion)
+                                            cmdInv.Parameters.AddWithValue("@p0", If(datos.Length > 0, datos(0).Trim(), ""))
+                                            cmdInv.Parameters.AddWithValue("@p1", If(datos.Length > 1, datos(1).Trim(), ""))
+                                            cmdInv.Parameters.AddWithValue("@p2", If(datos.Length > 2, datos(2).Trim(), ""))
+                                            cmdInv.Parameters.AddWithValue("@p3", If(datos.Length > 3, datos(3).Trim(), ""))
+                                            cmdInv.Parameters.AddWithValue("@p4", If(datos.Length > 4, datos(4).Trim().ToUpper(), ""))
+                                            cmdInv.Parameters.AddWithValue("@p5", If(datos.Length > 5, Val(datos(5)), 0))
+                                            cmdInv.ExecuteNonQuery()
+
+                                        Case "Proveedores"
+                                            Dim insertProv As String = "INSERT INTO Proveedores (Proveedor, RFC, Direccion) VALUES (@p0, @p1, @p2) ON CONFLICT(Proveedor) DO UPDATE SET RFC=@p1, Direccion=@p2"
+                                            Dim cmdProv As New SQLiteCommand(insertProv, conexion, transaccion)
+                                            cmdProv.Parameters.AddWithValue("@p0", If(datos.Length > 0, datos(0).Trim(), ""))
+                                            cmdProv.Parameters.AddWithValue("@p1", If(datos.Length > 1, datos(1).Trim(), ""))
+                                            cmdProv.Parameters.AddWithValue("@p2", If(datos.Length > 2, datos(2).Trim(), ""))
+                                            cmdProv.ExecuteNonQuery()
+
+                                        Case "Medicos"
+                                            Dim insertMed As String = "INSERT INTO Medicos (Cedula, NombreMed, Calle, NoInt, NoExt, Colonia, Ciudad, Estado, CP, Pais, Tel) VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10) ON CONFLICT(Cedula) DO UPDATE SET NombreMed=@p1, Tel=@p10"
+                                            Dim cmdMed As New SQLiteCommand(insertMed, conexion, transaccion)
                                             For j As Integer = 0 To 10
-                                                comando.Parameters.AddWithValue("@p" & j, If(datos.Length > j, datos(j), ""))
+                                                cmdMed.Parameters.AddWithValue("@p" & j, If(datos.Length > j, datos(j).Trim(), ""))
                                             Next
-                                        End If
+                                            cmdMed.ExecuteNonQuery()
+                                    End Select
 
-                                        comando.ExecuteNonQuery()
-                                        registros += 1
-                                    End While
-                                End Using
+                                    registros += 1
+                                End While
+
                                 transaccion.Commit()
                             End Using
                         End Using
-                        MessageBox.Show("¡Éxito! Se actualizaron " & registros & " registros en " & tablaDestino & ".", "Finalizado", MessageBoxButtons.OK, MessageBoxIcon.Information)
+
+                        MessageBox.Show("¡Éxito! Se importaron " & registros & " registros en " & tablaDestino & ".", "Finalizado", MessageBoxButtons.OK, MessageBoxIcon.Information)
+
+                        If pnlModuloTablas.Visible Then
+                            If tablaDestino = "Entradas" Then
+                                ConfigurarTablaEntradas()
+                            ElseIf tablaDestino = "Salidas" Then
+                                ConfigurarTablaSalidas()
+                            ElseIf tablaDestino = "Inventario" Then
+                                ConfigurarTablaInventario()
+                            ElseIf tablaDestino = "Proveedores" Then
+                                ConfigurarTablaProveedores()
+                            ElseIf tablaDestino = "Medicos" Then
+                                ConfigurarTablaMedicos()
+                            End If
+                        End If
                     End If
                 End Using
             Catch ex As Exception
-                MessageBox.Show("Error al leer tu archivo: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                MessageBox.Show("Error al leer el archivo CSV: " & ex.Message, "Error de Importación", MessageBoxButtons.OK, MessageBoxIcon.Error)
             End Try
         End If
     End Sub
 
     Private Sub btnNuevaEntrada_Click(sender As Object, e As EventArgs) Handles btnNuevaEntrada.Click
         Dim ventanaCaptura As New FormEntrada()
-        ventanaCaptura.ShowDialog()
-        If DataGridView1.Visible AndAlso Not panelInicio.Visible Then
+        ventanaCaptura.StartPosition = FormStartPosition.CenterScreen
+        ventanaCaptura.ShowDialog(Me)
+        If pnlModuloTablas.Visible AndAlso Not panelInicio.Visible Then
             ConfigurarTablaEntradas()
         End If
     End Sub
 
     Private Sub btnNuevaSalida_Click(sender As Object, e As EventArgs) Handles btnNuevaSalida.Click
         Dim ventanaSalida As New FormSalida()
-        ventanaSalida.ShowDialog()
-        If DataGridView1.Visible AndAlso Not panelInicio.Visible Then
+        ventanaSalida.StartPosition = FormStartPosition.CenterScreen
+        ventanaSalida.ShowDialog(Me)
+        If pnlModuloTablas.Visible AndAlso Not panelInicio.Visible Then
             ConfigurarTablaSalidas()
         End If
     End Sub
-
-
     ' =========================================================
-    ' 12. ESTILO VISUAL DE LA BARRA LATERAL (FLUENT DESIGN)
+    ' 14. ESTILO VISUAL DE LA BARRA LATERAL (FLUENT DESIGN)
     ' =========================================================
     Private Sub AplicarEstiloFluent()
         Panel1.Dock = DockStyle.Left
-        Panel1.BackColor = Drawing.Color.FromArgb(243, 243, 243)
+        Panel1.BackColor = Drawing.Color.FromArgb(248, 250, 252)
         Panel1.Padding = New Padding(12, 12, 8, 12)
 
         Button1.Text = "🏠 Inicio"
@@ -1697,17 +2471,16 @@ Public Class Form1
                 Dim btn As Button = CType(control, Button)
                 btn.FlatStyle = FlatStyle.Flat
                 btn.FlatAppearance.BorderSize = 0
-                btn.BackColor = Drawing.Color.FromArgb(243, 243, 243)
-                btn.ForeColor = Drawing.Color.FromArgb(40, 40, 40)
+                btn.BackColor = Drawing.Color.FromArgb(248, 250, 252)
+                btn.ForeColor = Drawing.Color.FromArgb(71, 85, 105)
                 btn.Font = New Drawing.Font("Segoe UI", 10.0F, Drawing.FontStyle.Regular)
                 btn.TextAlign = Drawing.ContentAlignment.MiddleLeft
                 btn.Padding = New Padding(14, 0, 0, 0)
                 btn.Height = 42
                 btn.Dock = DockStyle.Top
                 btn.Margin = New Padding(0, 2, 0, 2)
-                btn.FlatAppearance.MouseOverBackColor = Drawing.Color.FromArgb(232, 232, 232)
-                btn.FlatAppearance.MouseDownBackColor = Drawing.Color.FromArgb(215, 215, 215)
-                RedondearBoton(btn, 10)
+                btn.FlatAppearance.MouseOverBackColor = Drawing.Color.FromArgb(241, 245, 249)
+                btn.FlatAppearance.MouseDownBackColor = Drawing.Color.FromArgb(226, 232, 240)
             End If
         Next
 
@@ -1727,39 +2500,8 @@ Public Class Form1
         Me.BackColor = Drawing.Color.White
     End Sub
 
-    Private Sub ConfigurarContenedorDataGridView()
-        pnlContenedorVistas.Controls.Add(DataGridView1)
-        DataGridView1.Dock = DockStyle.Fill
-        HabilitarDobleBuffer(DataGridView1)
-    End Sub
-
-    Private Sub AplicarEstiloTabla()
-        DataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells
-        DataGridView1.AllowUserToAddRows = False
-        DataGridView1.BackgroundColor = Drawing.Color.White
-        DataGridView1.BorderStyle = BorderStyle.None
-        DataGridView1.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal
-        DataGridView1.GridColor = Drawing.Color.FromArgb(230, 230, 230)
-        DataGridView1.RowHeadersVisible = False
-
-        DataGridView1.EnableHeadersVisualStyles = False
-        DataGridView1.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None
-        DataGridView1.ColumnHeadersDefaultCellStyle.BackColor = Drawing.Color.FromArgb(0, 102, 204)
-        DataGridView1.ColumnHeadersDefaultCellStyle.ForeColor = Drawing.Color.White
-        DataGridView1.ColumnHeadersDefaultCellStyle.Font = New Drawing.Font("Segoe UI", 10.0F, Drawing.FontStyle.Bold)
-        DataGridView1.ColumnHeadersHeight = 40
-
-        DataGridView1.DefaultCellStyle.Font = New Drawing.Font("Segoe UI", 10.0F, Drawing.FontStyle.Regular)
-        DataGridView1.DefaultCellStyle.SelectionBackColor = Drawing.Color.FromArgb(204, 232, 255)
-        DataGridView1.DefaultCellStyle.SelectionForeColor = Drawing.Color.Black
-        DataGridView1.RowTemplate.Height = 35
-        DataGridView1.AlternatingRowsDefaultCellStyle.BackColor = Drawing.Color.FromArgb(249, 249, 249)
-        DataGridView1.SelectionMode = DataGridViewSelectionMode.FullRowSelect
-    End Sub
-
-
     ' =========================================================
-    ' 13. CONFIGURACIÓN DE TABLAS Y LECTURA SQLITE
+    ' 15. CONFIGURACIÓN DE TABLAS Y LECTURA SQLITE
     ' =========================================================
     Private Sub ConfigurarTablaEntradas()
         DataGridView1.Columns.Clear()
@@ -1781,7 +2523,7 @@ Public Class Form1
         DataGridView1.Columns.Add("Factura", "Factura")
         DataGridView1.Columns.Add("Proveedor", "Proveedor")
         DataGridView1.Columns.Add("RFC", "RFC")
-        DataGridView1.Columns.Add("Direccion", "Direccion")
+        DataGridView1.Columns.Add("Direccion", "Dirección")
 
         Dim btnRevertir As New DataGridViewButtonColumn()
         btnRevertir.Name = "AccionRevertir"
@@ -1792,21 +2534,24 @@ Public Class Form1
         DataGridView1.Columns.Add(btnRevertir)
 
         AplicarEstiloTabla()
+        DataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells
 
         Using conexion As New SQLiteConnection(cadenaConexion)
             conexion.Open()
-            Dim consulta As String = "SELECT * FROM Entradas"
+            Dim consulta As String = "SELECT * FROM Entradas ORDER BY Id DESC"
             Using comando As New SQLiteCommand(consulta, conexion)
                 Using lector As SQLiteDataReader = comando.ExecuteReader()
                     While lector.Read()
                         DataGridView1.Rows.Add(lector("Id"), lector("Fecha"), lector("Codigo"), lector("Generico"), lector("Distintivo"),
-                                               lector("Presentacion"), lector("AWARE"), lector("Lote"), lector("Caducidad"),
-                                               lector("Existencia"), lector("Surtido"), lector("Saldo"), lector("Factura"),
-                                               lector("Proveedor"), lector("RFC"), lector("Direccion"))
+                                                lector("Presentacion"), lector("AWARE"), lector("Lote"), lector("Caducidad"),
+                                                lector("Existencia"), lector("Surtido"), lector("Saldo"), lector("Factura"),
+                                                lector("Proveedor"), lector("RFC"), lector("Direccion"))
                     End While
                 End Using
             End Using
         End Using
+
+        ActualizarHeaderModulo("📥 Registro de Entradas (Facturas de Proveedor)")
     End Sub
 
     Private Sub ConfigurarTablaInventario()
@@ -1829,28 +2574,40 @@ Public Class Form1
         DataGridView1.Columns.Add(btnBorrar)
 
         AplicarEstiloTabla()
+        DataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill
+
+        DataGridView1.Columns("Codigo").FillWeight = 13
+        DataGridView1.Columns("Generico").FillWeight = 27
+        DataGridView1.Columns("Distintivo").FillWeight = 18
+        DataGridView1.Columns("Presentacion").FillWeight = 18
+        DataGridView1.Columns("AWARE").FillWeight = 12
+        DataGridView1.Columns("ExistenciaActual").FillWeight = 12
+        DataGridView1.Columns("AccionRevertir").FillWeight = 10
+        DataGridView1.Columns("AccionRevertir").MinimumWidth = 95
 
         Using conexion As New SQLiteConnection(cadenaConexion)
             conexion.Open()
-            Dim consulta As String = "SELECT * FROM Inventario"
+            Dim consulta As String = "SELECT * FROM Inventario ORDER BY Generico ASC"
             Using comando As New SQLiteCommand(consulta, conexion)
                 Using lector As SQLiteDataReader = comando.ExecuteReader()
                     While lector.Read()
                         DataGridView1.Rows.Add(lector("Codigo"), lector("Generico"), lector("Distintivo"),
-                                               lector("Presentacion"), lector("AWARE"), lector("ExistenciaActual"))
+                                                lector("Presentacion"), lector("AWARE"), lector("ExistenciaActual"))
                     End While
                 End Using
             End Using
         End Using
+
+        ActualizarHeaderModulo("📦 Catálogo e Inventario de Medicamentos")
     End Sub
 
     Private Sub ConfigurarTablaProveedores()
         DataGridView1.Columns.Clear()
         DataGridView1.Rows.Clear()
 
-        DataGridView1.Columns.Add("Proveedor", "Proveedor")
+        DataGridView1.Columns.Add("Proveedor", "Proveedor / Razón Social")
         DataGridView1.Columns.Add("RFC", "RFC")
-        DataGridView1.Columns.Add("Direccion", "Direccion")
+        DataGridView1.Columns.Add("Direccion", "Dirección Fiscal")
 
         Dim btnBorrar As New DataGridViewButtonColumn()
         btnBorrar.Name = "AccionRevertir"
@@ -1861,10 +2618,17 @@ Public Class Form1
         DataGridView1.Columns.Add(btnBorrar)
 
         AplicarEstiloTabla()
+        DataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill
+
+        DataGridView1.Columns("Proveedor").FillWeight = 24
+        DataGridView1.Columns("RFC").FillWeight = 16
+        DataGridView1.Columns("Direccion").FillWeight = 50
+        DataGridView1.Columns("AccionRevertir").FillWeight = 10
+        DataGridView1.Columns("AccionRevertir").MinimumWidth = 100
 
         Using conexion As New SQLiteConnection(cadenaConexion)
             conexion.Open()
-            Dim consulta As String = "SELECT * FROM Proveedores"
+            Dim consulta As String = "SELECT * FROM Proveedores ORDER BY Proveedor ASC"
             Using comando As New SQLiteCommand(consulta, conexion)
                 Using lector As SQLiteDataReader = comando.ExecuteReader()
                     While lector.Read()
@@ -1873,6 +2637,8 @@ Public Class Form1
                 End Using
             End Using
         End Using
+
+        ActualizarHeaderModulo("🚚 Directorio de Proveedores y Distribuidores")
     End Sub
 
     Private Sub ConfigurarTablaSalidas()
@@ -1894,10 +2660,10 @@ Public Class Form1
         DataGridView1.Columns.Add("Saldo", "Saldo")
         DataGridView1.Columns.Add("Movimiento", "Movimiento")
         DataGridView1.Columns.Add("Folio", "Folio")
-        DataGridView1.Columns.Add("Cedula", "Cedula")
+        DataGridView1.Columns.Add("Cedula", "Cédula")
         DataGridView1.Columns.Add("Nombre", "Nombre")
-        DataGridView1.Columns.Add("Direccion", "Direccion")
-        DataGridView1.Columns.Add("Telefono", "Telefono")
+        DataGridView1.Columns.Add("Direccion", "Dirección")
+        DataGridView1.Columns.Add("Telefono", "Teléfono")
 
         Dim btnRevertir As New DataGridViewButtonColumn()
         btnRevertir.Name = "AccionRevertir"
@@ -1908,38 +2674,41 @@ Public Class Form1
         DataGridView1.Columns.Add(btnRevertir)
 
         AplicarEstiloTabla()
+        DataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells
 
         Using conexion As New SQLiteConnection(cadenaConexion)
             conexion.Open()
-            Dim consulta As String = "SELECT * FROM Salidas"
+            Dim consulta As String = "SELECT * FROM Salidas ORDER BY Id DESC"
             Using comando As New SQLiteCommand(consulta, conexion)
                 Using lector As SQLiteDataReader = comando.ExecuteReader()
                     While lector.Read()
                         DataGridView1.Rows.Add(lector("Id"), lector("Fecha"), lector("Codigo"), lector("Generico"), lector("Distintivo"),
-                                               lector("Presentacion"), lector("AWARE"), lector("Lote"), lector("Caducidad"),
-                                               lector("Existencia"), lector("Surtido"), lector("Saldo"), lector("Movimiento"),
-                                               lector("Folio"), lector("Cedula"), lector("Nombre"), lector("Direccion"), lector("Telefono"))
+                                                lector("Presentacion"), lector("AWARE"), lector("Lote"), lector("Caducidad"),
+                                                lector("Existencia"), lector("Surtido"), lector("Saldo"), lector("Movimiento"),
+                                                lector("Folio"), lector("Cedula"), lector("Nombre"), lector("Direccion"), lector("Telefono"))
                     End While
                 End Using
             End Using
         End Using
+
+        ActualizarHeaderModulo("📤 Registro de Salidas y Recetas Dispensadas")
     End Sub
 
     Private Sub ConfigurarTablaMedicos()
         DataGridView1.Columns.Clear()
         DataGridView1.Rows.Clear()
 
-        DataGridView1.Columns.Add("Cedula", "Cedula")
-        DataGridView1.Columns.Add("NombreMed", "NombreMed")
+        DataGridView1.Columns.Add("Cedula", "Cédula Profesional")
+        DataGridView1.Columns.Add("NombreMed", "Nombre del Médico")
         DataGridView1.Columns.Add("Calle", "Calle")
-        DataGridView1.Columns.Add("NoInt", "NoInt")
-        DataGridView1.Columns.Add("NoExt", "NoExt")
+        DataGridView1.Columns.Add("NoInt", "No. Int.")
+        DataGridView1.Columns.Add("NoExt", "No. Ext.")
         DataGridView1.Columns.Add("Colonia", "Colonia")
         DataGridView1.Columns.Add("Ciudad", "Ciudad")
         DataGridView1.Columns.Add("Estado", "Estado")
-        DataGridView1.Columns.Add("CP", "CP")
-        DataGridView1.Columns.Add("Pais", "Pais")
-        DataGridView1.Columns.Add("Tel", "Tel")
+        DataGridView1.Columns.Add("CP", "C.P.")
+        DataGridView1.Columns.Add("Pais", "País")
+        DataGridView1.Columns.Add("Tel", "Teléfono")
 
         Dim btnBorrar As New DataGridViewButtonColumn()
         btnBorrar.Name = "AccionRevertir"
@@ -1950,28 +2719,50 @@ Public Class Form1
         DataGridView1.Columns.Add(btnBorrar)
 
         AplicarEstiloTabla()
+        DataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill
+
+        DataGridView1.Columns("Cedula").FillWeight = 11
+        DataGridView1.Columns("NombreMed").FillWeight = 18
+        DataGridView1.Columns("Calle").FillWeight = 14
+        DataGridView1.Columns("NoInt").FillWeight = 6
+        DataGridView1.Columns("NoExt").FillWeight = 6
+        DataGridView1.Columns("Colonia").FillWeight = 10
+        DataGridView1.Columns("Ciudad").FillWeight = 9
+        DataGridView1.Columns("Estado").FillWeight = 8
+        DataGridView1.Columns("CP").FillWeight = 6
+        DataGridView1.Columns("Pais").FillWeight = 5
+        DataGridView1.Columns("Tel").FillWeight = 8
+        DataGridView1.Columns("AccionRevertir").FillWeight = 8
+        DataGridView1.Columns("AccionRevertir").MinimumWidth = 95
 
         Using conexion As New SQLiteConnection(cadenaConexion)
             conexion.Open()
-            Dim consulta As String = "SELECT * FROM Medicos"
+            Dim consulta As String = "SELECT * FROM Medicos ORDER BY NombreMed ASC"
             Using comando As New SQLiteCommand(consulta, conexion)
                 Using lector As SQLiteDataReader = comando.ExecuteReader()
                     While lector.Read()
                         DataGridView1.Rows.Add(lector("Cedula"), lector("NombreMed"), lector("Calle"), lector("NoInt"),
-                                               lector("NoExt"), lector("Colonia"), lector("Ciudad"), lector("Estado"),
-                                               lector("CP"), lector("Pais"), lector("Tel"))
+                                                lector("NoExt"), lector("Colonia"), lector("Ciudad"), lector("Estado"),
+                                                lector("CP"), lector("Pais"), lector("Tel"))
                     End While
                 End Using
             End Using
         End Using
+
+        ActualizarHeaderModulo("🩺 Padrón de Médicos Prescriptores")
     End Sub
 
-
     ' =========================================================
-    ' 14. EVENTOS DE ELIMINACIÓN Y REVERSIÓN
+    ' 16. EVENTOS DE ELIMINACIÓN Y REVERSIÓN (CELL CLICK)
     ' =========================================================
     Private Sub DataGridView1_CellClick(sender As Object, e As DataGridViewCellEventArgs) Handles DataGridView1.CellClick
         If e.RowIndex >= 0 AndAlso DataGridView1.Columns(e.ColumnIndex).Name = "AccionRevertir" Then
+
+            If Not SesionActual.EsAdmin() Then
+                MessageBox.Show("Acceso Restringido:" & vbCrLf & "Solo los usuarios con rol de Administrador pueden eliminar registros o revertir movimientos.",
+                                "Permisos Insuficientes", MessageBoxButtons.OK, MessageBoxIcon.Stop)
+                Return
+            End If
 
             Using conexion As New SQLiteConnection(cadenaConexion)
                 conexion.Open()
@@ -2038,7 +2829,7 @@ Public Class Form1
                     End If
 
                 ElseIf DataGridView1.Columns.Contains("RFC") AndAlso Not DataGridView1.Columns.Contains("Surtido") Then
-                    Dim proveedor As String = DataGridView1.Rows(e.RowIndex).Cells("Proveedor").Value.ToString()
+                    Dim proveedor As String = DataGridView1.Rows(e.RowIndex).Cells("Proveedor / Razón Social").Value.ToString()
                     If MessageBox.Show("¿Eliminar a " & proveedor & "?", "Eliminar", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) = DialogResult.Yes Then
                         Dim cmd As New SQLiteCommand("DELETE FROM Proveedores WHERE Proveedor = @prov", conexion)
                         cmd.Parameters.AddWithValue("@prov", proveedor)
@@ -2046,8 +2837,8 @@ Public Class Form1
                         ConfigurarTablaProveedores()
                     End If
 
-                ElseIf DataGridView1.Columns.Contains("Cedula") AndAlso Not DataGridView1.Columns.Contains("Folio") Then
-                    Dim cedula As String = DataGridView1.Rows(e.RowIndex).Cells("Cedula").Value.ToString()
+                ElseIf DataGridView1.Columns.Contains("NombreMed") Then
+                    Dim cedula As String = DataGridView1.Rows(e.RowIndex).Cells("Cédula Profesional").Value.ToString()
                     If MessageBox.Show("¿Eliminar a este médico?", "Eliminar", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) = DialogResult.Yes Then
                         Dim cmd As New SQLiteCommand("DELETE FROM Medicos WHERE Cedula = @ced", conexion)
                         cmd.Parameters.AddWithValue("@ced", cedula)
@@ -2059,5 +2850,4 @@ Public Class Form1
             End Using
         End If
     End Sub
-
 End Class

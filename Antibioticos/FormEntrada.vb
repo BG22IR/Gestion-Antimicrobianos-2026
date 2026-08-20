@@ -1,5 +1,4 @@
 ﻿Imports System.Data.SQLite
-Imports System.Drawing
 
 Public Class FormEntrada
 

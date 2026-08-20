@@ -82,7 +82,7 @@ Partial Class FormSalida
         ' 
         ' txtCaducidad
         ' 
-        txtCaducidad.Location = New Point(428, 164)
+        txtCaducidad.Location = New Point(375, 164)
         txtCaducidad.Name = "txtCaducidad"
         txtCaducidad.Size = New Size(177, 23)
         txtCaducidad.TabIndex = 49
@@ -90,7 +90,7 @@ Partial Class FormSalida
         ' Label10
         ' 
         Label10.AutoSize = True
-        Label10.Location = New Point(326, 167)
+        Label10.Location = New Point(305, 167)
         Label10.Name = "Label10"
         Label10.Size = New Size(64, 15)
         Label10.TabIndex = 48
@@ -99,7 +99,7 @@ Partial Class FormSalida
         ' Label9
         ' 
         Label9.AutoSize = True
-        Label9.Location = New Point(326, 136)
+        Label9.Location = New Point(305, 136)
         Label9.Name = "Label9"
         Label9.Size = New Size(30, 15)
         Label9.TabIndex = 47
@@ -107,15 +107,15 @@ Partial Class FormSalida
         ' 
         ' txtAware
         ' 
-        txtAware.Location = New Point(565, 75)
+        txtAware.Location = New Point(744, 75)
         txtAware.Name = "txtAware"
-        txtAware.Size = New Size(177, 23)
+        txtAware.Size = New Size(237, 23)
         txtAware.TabIndex = 46
         ' 
         ' Label8
         ' 
         Label8.AutoSize = True
-        Label8.Location = New Point(417, 78)
+        Label8.Location = New Point(607, 78)
         Label8.Name = "Label8"
         Label8.Size = New Size(132, 15)
         Label8.TabIndex = 45
@@ -123,22 +123,22 @@ Partial Class FormSalida
         ' 
         ' txtLote
         ' 
-        txtLote.Location = New Point(428, 133)
+        txtLote.Location = New Point(375, 133)
         txtLote.Name = "txtLote"
         txtLote.Size = New Size(177, 23)
         txtLote.TabIndex = 44
         ' 
         ' txtPresentacion
         ' 
-        txtPresentacion.Location = New Point(565, 44)
+        txtPresentacion.Location = New Point(744, 44)
         txtPresentacion.Name = "txtPresentacion"
-        txtPresentacion.Size = New Size(177, 23)
+        txtPresentacion.Size = New Size(237, 23)
         txtPresentacion.TabIndex = 43
         ' 
         ' Label7
         ' 
         Label7.AutoSize = True
-        Label7.Location = New Point(417, 47)
+        Label7.Location = New Point(607, 47)
         Label7.Name = "Label7"
         Label7.Size = New Size(75, 15)
         Label7.TabIndex = 42
@@ -162,21 +162,21 @@ Partial Class FormSalida
         ' 
         txtDistintivo.Location = New Point(187, 104)
         txtDistintivo.Name = "txtDistintivo"
-        txtDistintivo.Size = New Size(177, 23)
+        txtDistintivo.Size = New Size(410, 23)
         txtDistintivo.TabIndex = 39
         ' 
         ' txtGenerico
         ' 
         txtGenerico.Location = New Point(187, 75)
         txtGenerico.Name = "txtGenerico"
-        txtGenerico.Size = New Size(177, 23)
+        txtGenerico.Size = New Size(410, 23)
         txtGenerico.TabIndex = 38
         ' 
         ' txtCodigo
         ' 
         txtCodigo.Location = New Point(187, 44)
         txtCodigo.Name = "txtCodigo"
-        txtCodigo.Size = New Size(177, 23)
+        txtCodigo.Size = New Size(410, 23)
         txtCodigo.TabIndex = 37
         ' 
         ' Label6
@@ -247,7 +247,7 @@ Partial Class FormSalida
         cmbMovimiento.FormattingEnabled = True
         cmbMovimiento.Location = New Point(187, 210)
         cmbMovimiento.Name = "cmbMovimiento"
-        cmbMovimiento.Size = New Size(177, 23)
+        cmbMovimiento.Size = New Size(192, 23)
         cmbMovimiento.TabIndex = 52
         ' 
         ' Label13
@@ -273,7 +273,7 @@ Partial Class FormSalida
         cmbCedula.FormattingEnabled = True
         cmbCedula.Location = New Point(187, 297)
         cmbCedula.Name = "cmbCedula"
-        cmbCedula.Size = New Size(282, 23)
+        cmbCedula.Size = New Size(355, 23)
         cmbCedula.TabIndex = 56
         ' 
         ' cmbNombreMed
@@ -281,7 +281,7 @@ Partial Class FormSalida
         cmbNombreMed.FormattingEnabled = True
         cmbNombreMed.Location = New Point(187, 326)
         cmbNombreMed.Name = "cmbNombreMed"
-        cmbNombreMed.Size = New Size(282, 23)
+        cmbNombreMed.Size = New Size(355, 23)
         cmbNombreMed.TabIndex = 57
         ' 
         ' Label15
@@ -297,7 +297,7 @@ Partial Class FormSalida
         ' 
         txtCalle.Location = New Point(187, 358)
         txtCalle.Name = "txtCalle"
-        txtCalle.Size = New Size(282, 23)
+        txtCalle.Size = New Size(355, 23)
         txtCalle.TabIndex = 60
         ' 
         ' Label16
@@ -312,7 +312,7 @@ Partial Class FormSalida
         ' Label17
         ' 
         Label17.AutoSize = True
-        Label17.Location = New Point(532, 305)
+        Label17.Location = New Point(613, 300)
         Label17.Name = "Label17"
         Label17.Size = New Size(67, 15)
         Label17.TabIndex = 63
@@ -320,22 +320,22 @@ Partial Class FormSalida
         ' 
         ' txtNoInt
         ' 
-        txtNoInt.Location = New Point(623, 302)
+        txtNoInt.Location = New Point(704, 297)
         txtNoInt.Name = "txtNoInt"
-        txtNoInt.Size = New Size(192, 23)
+        txtNoInt.Size = New Size(237, 23)
         txtNoInt.TabIndex = 64
         ' 
         ' txtNoExt
         ' 
-        txtNoExt.Location = New Point(623, 331)
+        txtNoExt.Location = New Point(704, 326)
         txtNoExt.Name = "txtNoExt"
-        txtNoExt.Size = New Size(192, 23)
+        txtNoExt.Size = New Size(237, 23)
         txtNoExt.TabIndex = 65
         ' 
         ' Label18
         ' 
         Label18.AutoSize = True
-        Label18.Location = New Point(532, 334)
+        Label18.Location = New Point(613, 329)
         Label18.Name = "Label18"
         Label18.Size = New Size(68, 15)
         Label18.TabIndex = 66
@@ -345,7 +345,7 @@ Partial Class FormSalida
         ' 
         txtColonia.Location = New Point(187, 418)
         txtColonia.Name = "txtColonia"
-        txtColonia.Size = New Size(177, 23)
+        txtColonia.Size = New Size(194, 23)
         txtColonia.TabIndex = 67
         ' 
         ' Label19
@@ -370,13 +370,13 @@ Partial Class FormSalida
         ' 
         txtCiudad.Location = New Point(187, 447)
         txtCiudad.Name = "txtCiudad"
-        txtCiudad.Size = New Size(177, 23)
+        txtCiudad.Size = New Size(194, 23)
         txtCiudad.TabIndex = 70
         ' 
         ' Label21
         ' 
         Label21.AutoSize = True
-        Label21.Location = New Point(532, 421)
+        Label21.Location = New Point(613, 416)
         Label21.Name = "Label21"
         Label21.Size = New Size(42, 15)
         Label21.TabIndex = 71
@@ -385,7 +385,7 @@ Partial Class FormSalida
         ' Label22
         ' 
         Label22.AutoSize = True
-        Label22.Location = New Point(532, 450)
+        Label22.Location = New Point(613, 445)
         Label22.Name = "Label22"
         Label22.Size = New Size(28, 15)
         Label22.TabIndex = 72
@@ -393,23 +393,23 @@ Partial Class FormSalida
         ' 
         ' txtEstado
         ' 
-        txtEstado.Location = New Point(623, 418)
+        txtEstado.Location = New Point(704, 413)
         txtEstado.Name = "txtEstado"
-        txtEstado.Size = New Size(192, 23)
+        txtEstado.Size = New Size(237, 23)
         txtEstado.TabIndex = 73
         ' 
         ' txtPais
         ' 
-        txtPais.Location = New Point(623, 447)
+        txtPais.Location = New Point(704, 442)
         txtPais.Name = "txtPais"
-        txtPais.Size = New Size(192, 23)
+        txtPais.Size = New Size(237, 23)
         txtPais.TabIndex = 74
         ' 
         ' btnGuardarSalida
         ' 
-        btnGuardarSalida.Location = New Point(766, 509)
+        btnGuardarSalida.Location = New Point(821, 509)
         btnGuardarSalida.Name = "btnGuardarSalida"
-        btnGuardarSalida.Size = New Size(75, 23)
+        btnGuardarSalida.Size = New Size(82, 31)
         btnGuardarSalida.TabIndex = 75
         btnGuardarSalida.Text = "Guardar"
         btnGuardarSalida.UseVisualStyleBackColor = True
@@ -417,7 +417,7 @@ Partial Class FormSalida
         ' Label23
         ' 
         Label23.AutoSize = True
-        Label23.Location = New Point(462, 218)
+        Label23.Location = New Point(398, 213)
         Label23.Name = "Label23"
         Label23.Size = New Size(71, 15)
         Label23.TabIndex = 76
@@ -425,22 +425,22 @@ Partial Class FormSalida
         ' 
         ' txtFolio
         ' 
-        txtFolio.Location = New Point(565, 215)
+        txtFolio.Location = New Point(501, 210)
         txtFolio.Name = "txtFolio"
-        txtFolio.Size = New Size(177, 23)
+        txtFolio.Size = New Size(73, 23)
         txtFolio.TabIndex = 77
         ' 
         ' txtTel
         ' 
         txtTel.Location = New Point(187, 389)
         txtTel.Name = "txtTel"
-        txtTel.Size = New Size(177, 23)
+        txtTel.Size = New Size(194, 23)
         txtTel.TabIndex = 62
         ' 
         ' Label24
         ' 
         Label24.AutoSize = True
-        Label24.Location = New Point(532, 389)
+        Label24.Location = New Point(613, 384)
         Label24.Name = "Label24"
         Label24.Size = New Size(81, 15)
         Label24.TabIndex = 78
@@ -448,16 +448,16 @@ Partial Class FormSalida
         ' 
         ' txtCP
         ' 
-        txtCP.Location = New Point(623, 386)
+        txtCP.Location = New Point(704, 381)
         txtCP.Name = "txtCP"
-        txtCP.Size = New Size(192, 23)
+        txtCP.Size = New Size(237, 23)
         txtCP.TabIndex = 79
         ' 
         ' FormSalida
         ' 
         AutoScaleDimensions = New SizeF(7F, 15F)
         AutoScaleMode = AutoScaleMode.Font
-        ClientSize = New Size(896, 555)
+        ClientSize = New Size(1027, 567)
         Controls.Add(txtCP)
         Controls.Add(Label24)
         Controls.Add(txtFolio)

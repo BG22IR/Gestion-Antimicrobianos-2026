@@ -1,5 +1,4 @@
 ﻿Imports System.Data.SQLite
-Imports System.Drawing
 
 Public Class FormSalida
     Dim cadenaConexion As String = "Data Source=BaseDatosADN.db;Version=3;"

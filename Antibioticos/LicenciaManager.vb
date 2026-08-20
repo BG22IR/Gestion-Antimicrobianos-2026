@@ -1,7 +1,7 @@
-﻿Imports System.Management
+﻿Imports System.IO
+Imports System.Management
 Imports System.Security.Cryptography
 Imports System.Text
-Imports System.IO
 
 Public Class LicenciaManager
 

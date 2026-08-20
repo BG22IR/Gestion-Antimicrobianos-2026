@@ -1,3 +1,6 @@
 <Solution>
   <Project Path="Antibioticos/Antibioticos.vbproj" />
+  <Project Path="Instalar Antibmicrobianos/Instalar Antibmicrobianos.vdproj" Type="Installer">
+    <Build />
+  </Project>
 </Solution>

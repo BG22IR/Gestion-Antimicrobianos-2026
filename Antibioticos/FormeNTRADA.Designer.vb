@@ -112,21 +112,21 @@ Partial Class FormEntrada
         ' 
         txtCodigo.Location = New Point(197, 91)
         txtCodigo.Name = "txtCodigo"
-        txtCodigo.Size = New Size(177, 23)
+        txtCodigo.Size = New Size(365, 23)
         txtCodigo.TabIndex = 6
         ' 
         ' txtGenerico
         ' 
         txtGenerico.Location = New Point(197, 122)
         txtGenerico.Name = "txtGenerico"
-        txtGenerico.Size = New Size(177, 23)
+        txtGenerico.Size = New Size(365, 23)
         txtGenerico.TabIndex = 7
         ' 
         ' txtDistintivo
         ' 
         txtDistintivo.Location = New Point(197, 151)
         txtDistintivo.Name = "txtDistintivo"
-        txtDistintivo.Size = New Size(177, 23)
+        txtDistintivo.Size = New Size(365, 23)
         txtDistintivo.TabIndex = 8
         ' 
         ' txtExistencia
@@ -146,7 +146,7 @@ Partial Class FormEntrada
         ' Label7
         ' 
         Label7.AutoSize = True
-        Label7.Location = New Point(404, 94)
+        Label7.Location = New Point(590, 97)
         Label7.Name = "Label7"
         Label7.Size = New Size(75, 15)
         Label7.TabIndex = 11
@@ -154,14 +154,14 @@ Partial Class FormEntrada
         ' 
         ' txtPresentacion
         ' 
-        txtPresentacion.Location = New Point(542, 91)
+        txtPresentacion.Location = New Point(728, 94)
         txtPresentacion.Name = "txtPresentacion"
-        txtPresentacion.Size = New Size(177, 23)
+        txtPresentacion.Size = New Size(256, 23)
         txtPresentacion.TabIndex = 12
         ' 
         ' txtLote
         ' 
-        txtLote.Location = New Point(438, 180)
+        txtLote.Location = New Point(385, 180)
         txtLote.Name = "txtLote"
         txtLote.Size = New Size(177, 23)
         txtLote.TabIndex = 13
@@ -169,7 +169,7 @@ Partial Class FormEntrada
         ' Label8
         ' 
         Label8.AutoSize = True
-        Label8.Location = New Point(404, 125)
+        Label8.Location = New Point(590, 128)
         Label8.Name = "Label8"
         Label8.Size = New Size(132, 15)
         Label8.TabIndex = 14
@@ -177,15 +177,15 @@ Partial Class FormEntrada
         ' 
         ' txtAware
         ' 
-        txtAware.Location = New Point(542, 122)
+        txtAware.Location = New Point(728, 125)
         txtAware.Name = "txtAware"
-        txtAware.Size = New Size(177, 23)
+        txtAware.Size = New Size(256, 23)
         txtAware.TabIndex = 15
         ' 
         ' Label9
         ' 
         Label9.AutoSize = True
-        Label9.Location = New Point(336, 183)
+        Label9.Location = New Point(304, 183)
         Label9.Name = "Label9"
         Label9.Size = New Size(30, 15)
         Label9.TabIndex = 16
@@ -194,7 +194,7 @@ Partial Class FormEntrada
         ' Label10
         ' 
         Label10.AutoSize = True
-        Label10.Location = New Point(336, 214)
+        Label10.Location = New Point(304, 214)
         Label10.Name = "Label10"
         Label10.Size = New Size(64, 15)
         Label10.TabIndex = 17
@@ -202,7 +202,7 @@ Partial Class FormEntrada
         ' 
         ' txtCaducidad
         ' 
-        txtCaducidad.Location = New Point(438, 211)
+        txtCaducidad.Location = New Point(385, 211)
         txtCaducidad.Name = "txtCaducidad"
         txtCaducidad.Size = New Size(177, 23)
         txtCaducidad.TabIndex = 18
@@ -228,7 +228,7 @@ Partial Class FormEntrada
         ' Label13
         ' 
         Label13.AutoSize = True
-        Label13.Location = New Point(404, 301)
+        Label13.Location = New Point(480, 301)
         Label13.Name = "Label13"
         Label13.Size = New Size(28, 15)
         Label13.TabIndex = 21
@@ -245,9 +245,9 @@ Partial Class FormEntrada
         ' 
         ' txtRFC
         ' 
-        txtRFC.Location = New Point(542, 301)
+        txtRFC.Location = New Point(530, 298)
         txtRFC.Name = "txtRFC"
-        txtRFC.Size = New Size(177, 23)
+        txtRFC.Size = New Size(256, 23)
         txtRFC.TabIndex = 24
         ' 
         ' btnNuevoProv
@@ -263,7 +263,7 @@ Partial Class FormEntrada
         ' 
         txtDireccion.Location = New Point(197, 412)
         txtDireccion.Name = "txtDireccion"
-        txtDireccion.Size = New Size(522, 23)
+        txtDireccion.Size = New Size(712, 23)
         txtDireccion.TabIndex = 26
         ' 
         ' cmbProveedor
@@ -271,12 +271,12 @@ Partial Class FormEntrada
         cmbProveedor.FormattingEnabled = True
         cmbProveedor.Location = New Point(197, 298)
         cmbProveedor.Name = "cmbProveedor"
-        cmbProveedor.Size = New Size(177, 23)
+        cmbProveedor.Size = New Size(258, 23)
         cmbProveedor.TabIndex = 27
         ' 
         ' btnGuardar
         ' 
-        btnGuardar.Location = New Point(706, 459)
+        btnGuardar.Location = New Point(869, 496)
         btnGuardar.Name = "btnGuardar"
         btnGuardar.Size = New Size(75, 23)
         btnGuardar.TabIndex = 28
@@ -296,14 +296,14 @@ Partial Class FormEntrada
         ' 
         txtFactura.Location = New Point(197, 366)
         txtFactura.Name = "txtFactura"
-        txtFactura.Size = New Size(177, 23)
+        txtFactura.Size = New Size(258, 23)
         txtFactura.TabIndex = 30
         ' 
         ' FormEntrada
         ' 
-        AutoScaleDimensions = New SizeF(7.0F, 15.0F)
+        AutoScaleDimensions = New SizeF(7F, 15F)
         AutoScaleMode = AutoScaleMode.Font
-        ClientSize = New Size(813, 504)
+        ClientSize = New Size(1011, 553)
         Controls.Add(txtFactura)
         Controls.Add(Label15)
         Controls.Add(btnGuardar)

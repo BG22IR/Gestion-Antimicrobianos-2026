@@ -1,6 +1,4 @@
-﻿Imports System.Drawing.Drawing2D
-
-Public Class FormActivacion
+﻿Public Class FormActivacion
 
     Private txtHwid As New TextBox()
     Private WithEvents btnCopiarHwid As New Button()
@@ -10,7 +8,7 @@ Public Class FormActivacion
     Private WithEvents btnSalir As New Button()
 
     Private Sub FormActivacion_Load(sender As Object, e As EventArgs) Handles MyBase.Load
-        Me.Text = "Activación de Software - Farmacias ADN"
+        Me.Text = "Activación de Software - Gestor de Antimicrobianos"
         Me.Size = New Size(540, 420)
         Me.StartPosition = FormStartPosition.CenterScreen
         Me.FormBorderStyle = FormBorderStyle.FixedDialog
